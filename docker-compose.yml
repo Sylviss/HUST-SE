@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  ###################
+  # Frontend Service (Vite/React)
+  ###################
+  frontend:
+    image: node:18 # Or your preferred Node LTS version
+    container_name: restaurant-vite-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      # Isolate node_modules in a volume
+      - frontend_node_modules:/app/node_modules
+    ports:
+      # Map host port 3000 to container port 3000
+      # We'll tell Vite to use port 3000 via the command
+      - "3718:3000"
+    environment:
+      # URL for the frontend to talk to the backend API
+      # Note the VITE_ prefix for Vite
+      - VITE_API_URL=http://backend:5000
+      # Ensures Node environment is set for development tools
+      - NODE_ENV=development
+      # CHOKIDAR_USEPOLLING can still be helpful for file watching issues in Docker,
+      # even if Vite's HMR works differently than CRA's. Optional.
+      - CHOKIDAR_USEPOLLING=true
+    # Command to start Vite dev server:
+    # - 'npm run dev' calls the script in package.json
+    # - '-- --host' passes the '--host' flag *through* npm to the underlying 'vite' command,
+    #   telling it to listen on all interfaces (important for Docker)
+    # - '--port 3000' tells Vite to use port 3000 inside the container
+    command: npm run dev -- --host --port 3000
+    depends_on:
+      - backend
+    stdin_open: true
+    tty: true
+
+  ###################
+  # Backend Service (Node.js API)
+  ###################
+  backend:
+    image: node:18 # Use the same Node version for consistency
+    container_name: restaurant-node-backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      # Isolate node_modules in a volume
+      - backend_node_modules:/app/node_modules
+    ports:
+      # Map host port 5000 to container port 5000 (adjust if your backend uses a different port)
+      - "5000:5000"
+    environment:
+      # Database connection details for the backend
+      - DB_HOST=db         # Service name of the postgres container
+      - DB_PORT=5432
+      - DB_USER=devuser
+      - DB_PASSWORD=devpassword
+      - DB_NAME=restaurant_db
+      # Port the backend server should listen on inside the container
+      - PORT=5000
+      - NODE_ENV=development
+      # Add any other backend-specific env vars (API keys, secrets, etc.)
+      # - JWT_SECRET=yoursecretkeyfordev
+    # Command to start the backend dev server (e.g., using nodemon)
+    command: npm run dev # Assumes "dev": "nodemon src/server.js" or similar in backend/package.json
+    depends_on:
+      db: # Backend depends on the database
+        condition: service_healthy # Wait for DB healthcheck to pass
+    stdin_open: true
+    tty: true
+
+  ###################
+  # Database Service (PostgreSQL)
+  ###################
+  db:
+    image: postgres:15 # Or your preferred Postgres version
+    container_name: restaurant-postgres-db
+    environment:
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: restaurant_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Map host port 5432 for direct DB access if needed
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      # Checks if Postgres is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U devuser -d restaurant_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+###################
+# Named Volumes
+###################
+volumes:
+  postgres_data:
+  frontend_node_modules:
+  backend_node_modules:

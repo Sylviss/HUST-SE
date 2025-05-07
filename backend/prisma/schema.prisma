@@ -1,0 +1,251 @@
+// ./backend/prisma/schema.prisma
+
+// Specifies the database provider and connection URL (read from .env)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Specifies the Prisma Client generator
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- Enums for Statuses and Roles ---
+
+enum StaffRole {
+  Waiter
+  Cashier
+  KitchenStaff
+  Manager
+}
+
+enum TableStatus {
+  Available
+  Occupied
+  Reserved
+  NeedsCleaning
+}
+
+enum ReservationStatus {
+  Pending
+  Confirmed
+  Cancelled
+  Seated
+  NoShow
+}
+
+enum DiningSessionStatus {
+  Active
+  Billed
+  Closed
+}
+
+enum OrderStatus {
+  Pending
+  Preparing
+  Ready
+  Served
+  Cancelled
+}
+
+enum OrderItemStatus {
+  Pending
+  Preparing
+  Ready
+  Served
+  Cancelled // If an item can be cancelled individually
+}
+
+enum BillStatus {
+  Unpaid
+  Paid
+  Void
+}
+
+// --- Model Definitions ---
+
+model Customer {
+  id           Int           @id @default(autoincrement()) // Changed to Int for simplicity, use CUID/UUID if preferred
+  name         String
+  contactPhone String?       @unique
+  contactEmail String?       @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[] // Relation field
+
+  @@map("customers") // Maps to the 'customers' table
+}
+
+// --- Corrected MenuItem Model ---
+model MenuItem {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  isAvailable Boolean  @default(true)
+  imageUrl    String?
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems OrderItem[] // Relation field
+
+  // Corrected Relation: Added explicit name "MenuItemsManagement"
+  managedBy   Staff? @relation("MenuItemsManagement", fields: [managedById], references: [id], onDelete: SetNull) // Manager who manages this item (optional)
+  managedById Int?
+
+  @@map("menu_items")
+}
+
+// --- Corrected Staff Model ---
+model Staff {
+  id           Int       @id @default(autoincrement())
+  name         String
+  role         StaffRole
+  username     String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  reservationsConfirmed Reservation[]   @relation("ConfirmedByStaff")
+  sessionsOpened        DiningSession[] @relation("OpenedByStaff")
+  ordersTaken           Order[]         @relation("TakenByStaff")
+  billsGenerated        Bill[]          @relation("GeneratedByStaff")
+  managedStaff          Staff[]         @relation("ManagedByManager")
+  manager               Staff?          @relation("ManagedByManager", fields: [managerId], references: [id])
+  managerId             Int?
+
+  // Added the missing opposite relation field:
+  menuItemsManaged MenuItem[] @relation("MenuItemsManagement") // List of menu items this staff member manages
+
+  @@index([username])
+  @@map("staff")
+}
+
+model Table {
+  id          Int         @id @default(autoincrement())
+  tableNumber String      @unique
+  capacity    Int
+  status      TableStatus @default(Available)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  diningSessions DiningSession[] // Relation field
+
+  @@map("tables")
+}
+
+model Reservation {
+  id              Int               @id @default(autoincrement())
+  reservationTime DateTime
+  partySize       Int
+  status          ReservationStatus @default(Pending)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull) // Allow null customer if they delete account
+  customerId Int?
+
+  confirmedBy        Staff? @relation("ConfirmedByStaff", fields: [staffIdConfirmedBy], references: [id], onDelete: SetNull) // Staff who confirmed
+  staffIdConfirmedBy Int?
+
+  diningSession DiningSession? // Relation field (A reservation might lead to one session)
+
+  @@index([customerId])
+  @@index([staffIdConfirmedBy])
+  @@map("reservations")
+}
+
+model DiningSession {
+  id              Int                 @id @default(autoincrement())
+  partyIdentifier String? // Customer name or temp ID
+  startTime       DateTime            @default(now())
+  endTime         DateTime?
+  status          DiningSessionStatus @default(Active)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  table   Table @relation(fields: [tableId], references: [id])
+  tableId Int
+
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull) // Link to original reservation
+  reservationId Int?         @unique // A reservation should only start one session
+
+  openedBy        Staff @relation("OpenedByStaff", fields: [staffIdOpenedBy], references: [id])
+  staffIdOpenedBy Int
+
+  orders Order[] // Relation field
+  bill   Bill? // Relation field (A session results in one bill)
+
+  @@index([tableId])
+  @@index([reservationId])
+  @@index([staffIdOpenedBy])
+  @@map("dining_sessions")
+}
+
+model Order {
+  id        Int         @id @default(autoincrement())
+  orderTime DateTime    @default(now())
+  status    OrderStatus @default(Pending)
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  diningSession DiningSession @relation(fields: [sessionId], references: [id])
+  sessionId     Int
+
+  takenBy        Staff @relation("TakenByStaff", fields: [staffIdTakenBy], references: [id])
+  staffIdTakenBy Int
+
+  items OrderItem[] // Relation field
+
+  @@index([sessionId])
+  @@index([staffIdTakenBy])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               Int             @id @default(autoincrement())
+  quantity         Int
+  priceAtOrderTime Decimal         @db.Decimal(10, 2)
+  specialRequests  String?
+  status           OrderItemStatus @default(Pending)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade) // Delete item if order is deleted
+  orderId Int
+
+  menuItem MenuItem @relation(fields: [itemId], references: [id], onDelete: Restrict) // Prevent deleting menu item if ordered
+  itemId   Int
+
+  @@index([orderId])
+  @@index([itemId])
+  @@map("order_items")
+}
+
+model Bill {
+  id                      Int        @id @default(autoincrement())
+  generationTime          DateTime   @default(now())
+  subtotalAmount          Decimal    @db.Decimal(10, 2)
+  taxAmount               Decimal    @default(0.00) @db.Decimal(10, 2)
+  discountAmount          Decimal    @default(0.00) @db.Decimal(10, 2)
+  totalAmount             Decimal    @db.Decimal(10, 2) // Should likely be calculated
+  status                  BillStatus @default(Unpaid)
+  paymentConfirmationTime DateTime?
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+
+  diningSession DiningSession @relation(fields: [sessionId], references: [id])
+  sessionId     Int           @unique // Enforce one bill per session
+
+  generatedBy        Staff @relation("GeneratedByStaff", fields: [staffIdGeneratedBy], references: [id])
+  staffIdGeneratedBy Int
+
+  @@index([sessionId])
+  @@index([staffIdGeneratedBy])
+  @@map("bills")
+}
