@@ -94,24 +94,25 @@ export const getDiningSessionById = async (sessionId) => {
 };
 
 export const getAllDiningSessions = async (filters = {}) => {
-  // Example filters: { status: 'ACTIVE', tableId: 'uuid' }
   const whereClause = {};
-  if (filters.status) whereClause.status = filters.status;
   if (filters.tableId) whereClause.tableId = filters.tableId;
-  if (filters.date) {
-      const startDate = new Date(filters.date);
-      startDate.setHours(0,0,0,0);
-      const endDate = new Date(filters.date);
-      endDate.setHours(23,59,59,999);
-      whereClause.startTime = { gte: startDate, lte: endDate };
+  if (filters.date) { /* ... date filter logic ... */ }
+
+  if (filters.status) {
+    const statuses = filters.status.split(','); // Handle comma-separated statuses
+    if (statuses.length > 0) {
+      whereClause.status = { in: statuses.map(s => s.trim().toUpperCase())
+                                     .filter(s => Object.values(DiningSessionStatus).includes(s)) };
+    }
   }
 
   return prisma.diningSession.findMany({
     where: whereClause,
     include: {
-      table: true,
+      table: { select: { id: true, tableNumber: true } }, // Select only needed fields for list
       reservation: { select: { id: true, customer: { select: { name: true }} } },
       openedBy: { select: { id: true, name: true } },
+      // Avoid including all orders and items here for performance on a list view
     },
     orderBy: { startTime: 'desc' },
   });

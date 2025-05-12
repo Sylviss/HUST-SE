@@ -33,10 +33,10 @@ export const getOrderByIdHandler = async (req, res, next) => {
   }
 };
 
-export const getOrdersBySessionHandler = async (req, res, next) => {
+export const getAllOrdersHandler = async (req, res, next) => {
   try {
-    const { sessionId } = req.params;
-    const orders = await orderService.getOrdersBySessionId(sessionId);
+    const filters = req.query; // e.g., { status: 'PENDING,PREPARING' }
+    const orders = await orderService.getAllOrders(filters); // Uses the service function we fixed
     res.status(200).json(orders);
   } catch (error) {
     next(error);

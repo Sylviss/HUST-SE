@@ -75,75 +75,87 @@ const checkTableAvailability = async (tx, reservationTime, partySize, requestedT
 };
 
 export const createReservation = async (reservationData, customerDetails) => {
-  // ... (customer creation logic as before) ...
-  const { reservationTime, partySize, notes, tableId: requestedTableId } = reservationData;
-   if (!reservationTime || !partySize || partySize <= 0) {
-        throw new Error('Reservation time and valid party size are required.');
+  const { reservationTime, partySize, notes } = reservationData; // Remove tableId from here
+
+  if (!reservationTime || !partySize || partySize <= 0) {
+    throw new Error('Reservation time and valid party size are required.');
   }
+
   const customer = await findOrCreateCustomer(customerDetails);
 
+  // No table availability check or assignment at creation time.
+  // Table is assigned during confirmation by staff.
 
-  // Using the more robust check within a transaction for consistency
-  return prisma.$transaction(async (tx) => {
-    const assignedTable = await checkTableAvailability(tx, new Date(reservationTime), partySize, requestedTableId);
-
-    return tx.reservation.create({
-      data: {
-        customerId: customer.id,
-        reservationTime: new Date(reservationTime),
-        partySize,
-        notes,
-        status: ReservationStatus.PENDING,
-        tableId: assignedTable ? assignedTable.id : null, // Assign if a table was found/validated
-      },
-      include: { customer: true, table: true },
-    });
+  return prisma.reservation.create({
+    data: {
+      customerId: customer.id,
+      reservationTime: new Date(reservationTime),
+      partySize,
+      notes,
+      status: ReservationStatus.PENDING,
+      tableId: null, // Explicitly set to null or omit
+    },
+    include: { customer: true, table: true },
   });
 };
 
-export const confirmReservation = async (reservationId, staffId, tableIdToAssign = null) => {
-    return prisma.$transaction(async (tx) => {
-        const reservation = await tx.reservation.findUnique({ where: { id: reservationId } });
-        if (!reservation) throw new Error('Reservation not found');
-        if (reservation.status !== ReservationStatus.PENDING) {
-            throw new Error(`Reservation cannot be confirmed. Current status: ${reservation.status}`);
-        }
+export const confirmReservation = async (reservationId, staffId, tableIdManuallySelected = null) => {
+  return prisma.$transaction(async (tx) => {
+      const reservation = await tx.reservation.findUnique({ where: { id: reservationId } });
+      if (!reservation) throw new Error('Reservation not found');
+      if (reservation.status !== ReservationStatus.PENDING) {
+          throw new Error(`Reservation cannot be confirmed. Current status: ${reservation.status}`);
+      }
 
-        let finalTableId = reservation.tableId || tableIdToAssign;
-        let assignedTable;
+      let assignedTable;
+      if (tableIdManuallySelected) {
+          // Staff manually selected a table, validate it
+          assignedTable = await checkTableAvailability(tx, reservation.reservationTime, reservation.partySize, tableIdManuallySelected, reservation.id);
+      } else {
+          // No table manually selected, try to auto-assign
+          try {
+              assignedTable = await checkTableAvailability(tx, reservation.reservationTime, reservation.partySize, null, reservation.id);
+          } catch (error) {
+              // If auto-assign fails (no tables found), and no table was pre-assigned to reservation.
+              // This means we cannot confirm without manual intervention or if tables become free.
+              if (!reservation.tableId) { // and if reservation didn't already have a potential table
+                   throw new Error(`No tables available to auto-assign for this reservation. Please select one manually or try later. Details: ${error.message}`);
+              }
+              // If reservation.tableId was set (e.g. during creation, though we removed that logic),
+              // and auto-assign fails, it means that pre-assigned table is no longer good.
+              // For now, we will proceed with the error from checkTableAvailability if a specific table (even if pre-assigned) fails.
+              // If reservation.tableId exists but tableIdManuallySelected is null, it means "try auto-assign".
+              // if it was pre-assigned AND fails, the checkTableAvailability on that pre-assigned would have thrown.
+              throw error; // Re-throw if no suitable table found by auto-assign
+          }
+      }
 
-        if (finalTableId) {
-            assignedTable = await checkTableAvailability(tx, reservation.reservationTime, reservation.partySize, finalTableId, reservation.id);
-            // checkTableAvailability throws if not suitable
-        } else {
-            // Attempt to auto-assign a table if none was pre-assigned or provided now
-            assignedTable = await checkTableAvailability(tx, reservation.reservationTime, reservation.partySize, null, reservation.id);
-            finalTableId = assignedTable.id;
-        }
+      if (!assignedTable || !assignedTable.id) {
+          // This case should ideally be caught by checkTableAvailability throwing an error.
+          throw new Error('Could not assign a suitable table for the reservation.');
+      }
 
-        // Update reservation
-        const confirmedReservation = await tx.reservation.update({
-            where: { id: reservationId },
-            data: {
-                status: ReservationStatus.CONFIRMED,
-                staffIdConfirmedBy: staffId,
-                tableId: finalTableId,
-            },
-            include: { customer: true, table: true, confirmedBy: { select: { id: true, name: true } } },
-        });
+      // Update reservation
+      const confirmedReservation = await tx.reservation.update({
+          where: { id: reservationId },
+          data: {
+              status: ReservationStatus.CONFIRMED,
+              staffIdConfirmedBy: staffId,
+              tableId: assignedTable.id, // Assign the validated or auto-assigned table
+          },
+          include: { customer: true, table: true, confirmedBy: { select: { id: true, name: true } } },
+      });
 
-        // Optionally update table status to RESERVED
-        if (finalTableId) {
-             const table = await tx.table.findUnique({where: {id: finalTableId}});
-             if(table && table.status === TableStatus.AVAILABLE) { // Only if it was available
-                await tx.table.update({
-                    where: { id: finalTableId },
-                    data: { status: TableStatus.RESERVED },
-                });
-             }
-        }
-        return confirmedReservation;
-    });
+      // Update table status to RESERVED
+      // Only update if the table was previously AVAILABLE. If it was already RESERVED (e.g. for this res), no change needed.
+      if (assignedTable.status === TableStatus.AVAILABLE) {
+          await tx.table.update({
+              where: { id: assignedTable.id },
+              data: { status: TableStatus.RESERVED },
+          });
+      }
+      return confirmedReservation;
+  });
 };
 
 export const cancelReservation = async (reservationId) => {

@@ -17,11 +17,11 @@ router.post(
   orderController.createOrderHandler
 );
 
-// Get all orders for a specific dining session
+// Get all orders
 router.get(
   '/',
   authorizeRoles(StaffRole.WAITER, StaffRole.MANAGER, StaffRole.CASHIER, StaffRole.KITCHEN_STAFF),
-  orderController.getOrdersBySessionHandler
+  orderController.getAllOrdersHandler
 );
 
 // Routes for individual orders (might also be accessed directly via /api/v1/orders/:orderId)

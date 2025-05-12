@@ -58,13 +58,25 @@ export const syncOrderStatusBasedOnItems = async (orderId, txClient = prisma) =>
 
 
   if (newOrderStatus !== order.status) {
-      return txClient.order.update({
-          where: { id: orderId },
-          data: { status: newOrderStatus },
-          include: { items: { include: { menuItem: true } } }
-      });
-  }
-  return order; // Return original order if no status change
+    return txClient.order.update({
+        where: { id: orderId },
+        data: { status: newOrderStatus },
+        include: { // <<< ENSURE THIS INCLUDE IS HERE
+            items: { include: { menuItem: { select: { id: true, name: true, price: true } } }, orderBy: {createdAt: 'asc'} },
+            takenBy: { select: { id: true, name: true } },
+            diningSession: { include: { table: { select: { id: true, tableNumber: true } } } }
+        }
+    });
+}
+// If no status change, refetch the order with full includes to be consistent
+return txClient.order.findUnique({
+    where: {id: orderId},
+    include: {
+        items: { include: { menuItem: { select: { id: true, name: true, price: true } } }, orderBy: {createdAt: 'asc'} },
+        takenBy: { select: { id: true, name: true } },
+        diningSession: { include: { table: { select: { id: true, tableNumber: true } } } }
+    }
+});
 };
 
 
@@ -152,14 +164,39 @@ export const getOrderById = async (orderId) => {
   return order;
 };
 
-export const getOrdersBySessionId = async (sessionId) => {
+export const getAllOrders = async (filters = {}) => {
+  const whereClause = {};
+  if (filters.status) {
+    const statuses = filters.status.split(',')
+                          .map(s => s.trim().toUpperCase())
+                          .filter(s => Object.values(OrderStatus).includes(s));
+    if (statuses.length > 0) {
+      whereClause.status = { in: statuses };
+    }
+  }
+  if (filters.diningSessionId) { // If filtering by session ID directly
+    whereClause.diningSessionId = filters.diningSessionId;
+  }
+  // Add other filters like date range if needed for kitchen view
+
   return prisma.order.findMany({
-    where: { diningSessionId: sessionId },
+    where: whereClause,
     include: {
-      items: { include: { menuItem: { select: { id:true, name: true, price: true }} } },
+      items: {
+        include: {
+          menuItem: { select: { id: true, name: true, price: true } } // Select specific menuItem fields
+        },
+        orderBy: { createdAt: 'asc' } // Order items within an order
+      },
       takenBy: { select: { id: true, name: true } },
+      // CRITICAL CHANGE: Include diningSession and its related table
+      diningSession: {
+        include: {
+          table: { select: { id: true, tableNumber: true } } // Select specific table fields
+        }
+      }
     },
-    orderBy: { orderTime: 'asc' },
+    orderBy: { orderTime: 'asc' } // Order the main list of orders
   });
 };
 
@@ -189,9 +226,23 @@ export const updateOrderStatus = async (orderId, newStatus, staffId) => {
   return prisma.order.update({
     where: { id: orderId },
     data: { status: newStatus },
-    include: { items: { include: { menuItem: true } } },
+    include: {
+      items: {
+        include: {
+          menuItem: { select: { id: true, name: true, price: true } }
+        },
+        orderBy: { createdAt: 'asc' }
+      },
+      takenBy: { select: { id: true, name: true } },
+      diningSession: {
+        include: {
+          table: { select: { id: true, tableNumber: true } }
+        }
+      }
+    },
   });
 };
+
 
 export const updateOrderItemStatus = async (orderItemId, newStatus, reason = null, staffId) => {
   if (!Object.values(OrderItemStatus).includes(newStatus)) {
@@ -210,14 +261,28 @@ export const updateOrderItemStatus = async (orderItemId, newStatus, reason = nul
 
   const updatedItem = await prisma.orderItem.update({
     where: { id: orderItemId },
-    data: {
-      status: newStatus,
-      // reasonForStatus: reason // If you add this field
-    },
-  });
+    data: { status: newStatus /*, reasonForStatus: reason */ },
+    include: { // Return the menuItem for context in UI updates
+        menuItem: { select: {id: true, name: true, price: true} }
+    }
+});
 
-  // After an item status changes, sync the parent order's status
-  await syncOrderStatusBasedOnItems(orderItem.orderId);
+// IMPORTANT: syncOrderStatusBasedOnItems should ideally return the FULL order object
+// with all necessary includes if the order status actually changes.
+// Or, the frontend thunk for updateOrderItemStatus should refetch the parent order
+// if the parent order's status might have changed.
+// For now, let's assume syncOrderStatusBasedOnItems might just return the updated order object.
+const updatedOrder = await syncOrderStatusBasedOnItems(orderItem.orderId);
 
-  return updatedItem;
+// If syncOrderStatusBasedOnItems doesn't return the full order with all includes,
+// the frontend reducer for updateOrderItemStatus.fulfilled might need to just update
+// the item and then trigger a re-fetch of the parent order for full consistency.
+// Alternatively, the backend here could return both updatedItem and the potentially updated parentOrder (fully populated).
+// Let's assume for now the frontend primarily cares about the item update from this specific thunk.
+// The updateOrderStatus.fulfilled reducer in Redux is responsible for the full order object.
+
+return updatedItem; // This only returns the item.
+                    // Consider returning the full parent order if its status changes.
 };
+
+

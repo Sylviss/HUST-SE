@@ -14,6 +14,15 @@ import EditMenuItemPage from './pages/admin/EditMenuItemPage';
 import EditTablePage from './pages/admin/EditTablePage';
 import TablesPage from './pages/admin/TablesPage';
 import AddNewTablePage from './pages/admin/AddNewTablePage';
+import ReservationsManagementPage from './pages/staff/ReservationsManagementPage'; // Import
+import TableMapPage from './pages/staff/TableMapPage'; // Import
+import OrderTakingPage from './pages/staff/OrderTakingPage'; // Import
+import ActiveSessionsPage from './pages/staff/ActiveSessionsPage'; // Import
+import KitchenDisplayPage from './pages/staff/KitchenDisplayPage'; // Import
+
+
+
+
 
 
 
@@ -27,6 +36,11 @@ function App() {
     navigate('/login');
   };
 
+  const canManageSeating = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER;
+  const canTakeOrders = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER; // Define who can take orders
+  const canManageOrdersAndSessions = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER;
+  const isKitchenOrManager = staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.MANAGER;
+  
   return (
     // Use Tailwind classes for a full-height flex column layout
     <div className="flex flex-col min-h-screen w-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -47,6 +61,26 @@ function App() {
             {isAuthenticated && staff?.role === StaffRole.MANAGER && (
               <Link to="/admin/tables" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6"> {/* Added mr-6 */}
                 Manage Tables
+              </Link>
+            )}
+            {isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.WAITER) && (
+              <Link to="/staff/reservations" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">
+                Manage Reservations
+              </Link>
+            )}
+            {isAuthenticated && canManageSeating && (
+              <Link to="/staff/seating" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">
+                Seating / Tables
+              </Link>
+            )}
+            {isAuthenticated && canManageOrdersAndSessions && (
+              <Link to="/staff/active-sessions" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">
+                Active Sessions
+              </Link>
+            )}
+            {isAuthenticated && isKitchenOrManager && (
+              <Link to="/staff/kitchen" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">
+                Kitchen Display
               </Link>
             )}
             {/* Add more primary navigation links here as needed, following the pattern */}
@@ -92,6 +126,15 @@ function App() {
               <Route path="/admin/tables/new" element={<AddNewTablePage />} />
               <Route path="/admin/tables/edit/:tableId" element={<EditTablePage />} />
               {/* Add other admin routes here */}
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER, StaffRole.CASHIER, StaffRole.WAITER]} />}>
+              <Route path="/staff/reservations" element={<ReservationsManagementPage />} />
+              <Route path="/staff/seating" element={<TableMapPage />} />
+              <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} />
+              <Route path="/staff/active-sessions" element={<ActiveSessionsPage />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.KITCHEN_STAFF, StaffRole.MANAGER]} />}>
+              <Route path="/staff/kitchen" element={<KitchenDisplayPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
