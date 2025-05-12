@@ -73,7 +73,7 @@ export const updateMenuItemAvailability = createAsyncThunk(
   async ({ itemId, isAvailable }, { rejectWithValue }) => {
     try {
       const response = await apiClient.patch(`/menu-items/${itemId}/availability`, { isAvailable });
-      return response.data;
+      return response.data; // Expects the updated menuItem back
     } catch (error) {
       const errorMessage = error.response?.data?.message || error.message || 'Failed to update item availability';
       return rejectWithValue(errorMessage);
@@ -137,13 +137,15 @@ const menuItemSlice = createSlice({
         state.isSubmitting = false; state.submitError = action.payload;
       })
       .addCase(updateMenuItemAvailability.pending, (state) => {
-        state.isSubmitting = true; // Or a different loading state if needed
+        state.isSubmitting = true;
         state.submitError = null;
       })
       .addCase(updateMenuItemAvailability.fulfilled, (state, action) => {
         state.isSubmitting = false;
         const index = state.items.findIndex(item => item.id === action.payload.id);
-        if (index !== -1) state.items[index] = action.payload;
+        if (index !== -1) {
+          state.items[index] = action.payload; // Replace with updated item from backend
+        }
       })
       .addCase(updateMenuItemAvailability.rejected, (state, action) => {
         state.isSubmitting = false;

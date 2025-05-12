@@ -40,10 +40,10 @@ router.delete(
 );
 
 router.patch(
-  '/:itemId/availability', // Specific path for this action
+  '/:itemId/availability',
   isAuthenticated,
-  isManager,
-  menuItemController.updateMenuItemAvailabilityHandler // New controller handler
+  authorizeRoles(StaffRole.MANAGER, StaffRole.KITCHEN_STAFF), // ADD KITCHEN_STAFF
+  menuItemController.updateMenuItemAvailabilityHandler
 );
 
 export default router;
