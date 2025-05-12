@@ -4,3 +4,11 @@ export const StaffRole = {
   CASHIER: 'CASHIER',
   KITCHEN_STAFF: 'KITCHEN_STAFF',
 };
+
+export const TableStatusEnum = {
+  AVAILABLE: 'AVAILABLE',
+  OCCUPIED: 'OCCUPIED',
+  RESERVED: 'RESERVED',
+  NEEDS_CLEANING: 'NEEDS_CLEANING',
+  OUT_OF_SERVICE: 'OUT_OF_SERVICE',
+};

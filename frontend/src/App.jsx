@@ -11,6 +11,10 @@ import MenuItemsPage from './pages/MenuItemsPage'; // Import
 import { StaffRole } from './utils/constants'; // Create a constants file for roles if you like
 import AddNewMenuItemPage from './pages/admin/AddNewMenuItemPage';
 import EditMenuItemPage from './pages/admin/EditMenuItemPage';
+import EditTablePage from './pages/admin/EditTablePage';
+import TablesPage from './pages/admin/TablesPage';
+import AddNewTablePage from './pages/admin/AddNewTablePage';
+
 
 
 function App() {
@@ -27,19 +31,28 @@ function App() {
     // Use Tailwind classes for a full-height flex column layout
     <div className="flex flex-col min-h-screen w-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <nav className="bg-white dark:bg-gray-800 shadow-md">
-        <div className="flex items-center">
-          {isAuthenticated && <Link to="/" /* ... */>Dashboard</Link>}
-          {isAuthenticated && <Link to="/menu" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">Menu</Link>} {/* Add Menu Link */}
-        </div>
         <div className="container mx-auto px-6 py-3 flex justify-between items-center">
+          {/* Left side of the navbar for navigation links */}
           <div className="flex items-center">
             {isAuthenticated && (
               <Link to="/" className="text-xl font-semibold text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6">
                 Dashboard
               </Link>
             )}
-            {/* Add more primary navigation links here */}
+            {isAuthenticated && (
+              <Link to="/menu" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6"> {/* Added mr-6 for spacing */}
+                Menu
+              </Link>
+            )}
+            {isAuthenticated && staff?.role === StaffRole.MANAGER && (
+              <Link to="/admin/tables" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6"> {/* Added mr-6 */}
+                Manage Tables
+              </Link>
+            )}
+            {/* Add more primary navigation links here as needed, following the pattern */}
           </div>
+
+          {/* Right side of the navbar for Welcome message & Logout/Login */}
           <div>
             {isAuthenticated ? (
               <div className="flex items-center">
@@ -75,6 +88,9 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER]} />}> {/* Use imported enum or string 'MANAGER' */}
               <Route path="/admin/menu/new" element={<AddNewMenuItemPage />} />
               <Route path="/admin/menu/edit/:itemId" element={<EditMenuItemPage />} />
+              <Route path="/admin/tables" element={<TablesPage />} />
+              <Route path="/admin/tables/new" element={<AddNewTablePage />} />
+              <Route path="/admin/tables/edit/:tableId" element={<EditTablePage />} />
               {/* Add other admin routes here */}
             </Route>
           </Route>

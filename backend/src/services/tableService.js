@@ -1,6 +1,6 @@
 // ./backend/src/services/tableService.js
 import prisma from '../db/prismaClient.js';
-import { TableStatus } from '@prisma/client'; // Prisma generates enums
+import { TableStatus,DiningSessionStatus } from '@prisma/client'; // Prisma generates enums
 
 export const createTable = async (tableData) => {
   const { tableNumber, capacity, status } = tableData;
