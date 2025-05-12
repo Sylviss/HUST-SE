@@ -19,7 +19,7 @@ services:
     environment:
       # URL for the frontend to talk to the backend API
       # Note the VITE_ prefix for Vite
-      - VITE_API_URL=http://backend:5000
+      - VITE_API_URL=http://localhost:5000/api/v1
       # Ensures Node environment is set for development tools
       - NODE_ENV=development
       # CHOKIDAR_USEPOLLING can still be helpful for file watching issues in Docker,

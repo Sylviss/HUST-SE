@@ -1,251 +1,219 @@
 // ./backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
 
-// Specifies the database provider and connection URL (read from .env)
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// Specifies the Prisma Client generator
-generator client {
-  provider = "prisma-client-js"
-}
+model Staff {
+  id            String    @id @default(uuid())
+  name          String
+  role          StaffRole
+  username      String    @unique
+  passwordHash  String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-// --- Enums for Statuses and Roles ---
+  confirmedReservations Reservation[] @relation("ConfirmedByStaff")
+  diningSessionsOpened  DiningSession[] @relation("OpenedByStaff") // Relation to DiningSession
+  ordersTaken           Order[]         @relation("TakenByStaff") // For later
+  billsGenerated        Bill[]          @relation("GeneratedByStaff") // For later
+
+  @@map("staff")
+}
 
 enum StaffRole {
-  Waiter
-  Cashier
-  KitchenStaff
-  Manager
+  MANAGER
+  WAITER
+  CASHIER
+  KITCHEN_STAFF
 }
 
-enum TableStatus {
-  Available
-  Occupied
-  Reserved
-  NeedsCleaning
-}
-
-enum ReservationStatus {
-  Pending
-  Confirmed
-  Cancelled
-  Seated
-  NoShow
-}
-
-enum DiningSessionStatus {
-  Active
-  Billed
-  Closed
-}
-
-enum OrderStatus {
-  Pending
-  Preparing
-  Ready
-  Served
-  Cancelled
-}
-
-enum OrderItemStatus {
-  Pending
-  Preparing
-  Ready
-  Served
-  Cancelled // If an item can be cancelled individually
-}
-
-enum BillStatus {
-  Unpaid
-  Paid
-  Void
-}
-
-// --- Model Definitions ---
-
-model Customer {
-  id           Int           @id @default(autoincrement()) // Changed to Int for simplicity, use CUID/UUID if preferred
-  name         String
-  contactPhone String?       @unique
-  contactEmail String?       @unique
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  reservations Reservation[] // Relation field
-
-  @@map("customers") // Maps to the 'customers' table
-}
-
-// --- Corrected MenuItem Model ---
 model MenuItem {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?
-  price       Decimal  @db.Decimal(10, 2)
-  isAvailable Boolean  @default(true)
-  imageUrl    String?
-  tags        String[] @default([])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String    @id @default(uuid())
+  name          String    @unique
+  description   String?
+  price         Float
+  isAvailable   Boolean   @default(true)
+  tags          String[]  @default([])
+  imageUrl      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  // categoryId    String?
+  // MenuCategory  MenuCategory? @relation(fields: [categoryId], references: [id])
 
-  orderItems OrderItem[] // Relation field
-
-  // Corrected Relation: Added explicit name "MenuItemsManagement"
-  managedBy   Staff? @relation("MenuItemsManagement", fields: [managedById], references: [id], onDelete: SetNull) // Manager who manages this item (optional)
-  managedById Int?
+  OrderItems OrderItem[] // For later
 
   @@map("menu_items")
 }
 
-// --- Corrected Staff Model ---
-model Staff {
-  id           Int       @id @default(autoincrement())
+// New Models
+model Customer {
+  id           String        @id @default(uuid())
   name         String
-  role         StaffRole
-  username     String    @unique
-  passwordHash String
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  contactPhone String?       @unique // Optional, but unique if provided
+  contactEmail String?       @unique // Optional, but unique if provided
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[]
 
-  reservationsConfirmed Reservation[]   @relation("ConfirmedByStaff")
-  sessionsOpened        DiningSession[] @relation("OpenedByStaff")
-  ordersTaken           Order[]         @relation("TakenByStaff")
-  billsGenerated        Bill[]          @relation("GeneratedByStaff")
-  managedStaff          Staff[]         @relation("ManagedByManager")
-  manager               Staff?          @relation("ManagedByManager", fields: [managerId], references: [id])
-  managerId             Int?
-
-  // Added the missing opposite relation field:
-  menuItemsManaged MenuItem[] @relation("MenuItemsManagement") // List of menu items this staff member manages
-
-  @@index([username])
-  @@map("staff")
+  @@map("customers")
 }
 
 model Table {
-  id          Int         @id @default(autoincrement())
-  tableNumber String      @unique
-  capacity    Int
-  status      TableStatus @default(Available)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  diningSessions DiningSession[] // Relation field
+  id           String            @id @default(uuid())
+  tableNumber  String            @unique
+  capacity     Int
+  status       TableStatus       @default(AVAILABLE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  reservations Reservation[]     @relation("ReservedTable")
+  diningSessions DiningSession[] // Relation to DiningSession
 
   @@map("tables")
 }
 
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  NEEDS_CLEANING
+  OUT_OF_SERVICE
+}
+
 model Reservation {
-  id              Int               @id @default(autoincrement())
+  id            String            @id @default(uuid())
+  customerId    String
+  customer      Customer          @relation(fields: [customerId], references: [id])
+  tableId       String?
+  table         Table?            @relation("ReservedTable", fields: [tableId], references: [id])
+  staffIdConfirmedBy String?
+  confirmedBy   Staff?            @relation("ConfirmedByStaff", fields: [staffIdConfirmedBy], references: [id])
   reservationTime DateTime
-  partySize       Int
-  status          ReservationStatus @default(Pending)
-  notes           String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  partySize     Int
+  status        ReservationStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  diningSession DiningSession?    // Relation to DiningSession (one-to-one if reservation starts one session)
 
-  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull) // Allow null customer if they delete account
-  customerId Int?
-
-  confirmedBy        Staff? @relation("ConfirmedByStaff", fields: [staffIdConfirmedBy], references: [id], onDelete: SetNull) // Staff who confirmed
-  staffIdConfirmedBy Int?
-
-  diningSession DiningSession? // Relation field (A reservation might lead to one session)
-
-  @@index([customerId])
-  @@index([staffIdConfirmedBy])
   @@map("reservations")
 }
 
+enum ReservationStatus {
+  PENDING     // Customer requested, staff needs to confirm
+  CONFIRMED   // Staff confirmed
+  CANCELLED   // Cancelled by customer or staff
+  SEATED      // Customer has been seated (linked to a DiningSession)
+  COMPLETED   // Reservation fulfilled (after customer left)
+  NO_SHOW
+}
+
 model DiningSession {
-  id              Int                 @id @default(autoincrement())
-  partyIdentifier String? // Customer name or temp ID
-  startTime       DateTime            @default(now())
-  endTime         DateTime?
-  status          DiningSessionStatus @default(Active)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id                 String             @id @default(uuid())
+  tableId            String
+  table              Table              @relation(fields: [tableId], references: [id])
+  reservationId      String?            @unique // A reservation can only start one dining session
+  reservation        Reservation?       @relation(fields: [reservationId], references: [id])
+  staffIdOpenedBy    String
+  openedBy           Staff              @relation("OpenedByStaff", fields: [staffIdOpenedBy], references: [id])
+  partyIdentifier    String?            // e.g., Customer name for walk-in, or notes
+  partySize          Int                // Number of guests in this session
+  startTime          DateTime           @default(now())
+  endTime            DateTime?          // When the session is closed (e.g., after payment)
+  status             DiningSessionStatus @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  orders             Order[]            // For later
+  bill               Bill?              // For later
 
-  table   Table @relation(fields: [tableId], references: [id])
-  tableId Int
-
-  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull) // Link to original reservation
-  reservationId Int?         @unique // A reservation should only start one session
-
-  openedBy        Staff @relation("OpenedByStaff", fields: [staffIdOpenedBy], references: [id])
-  staffIdOpenedBy Int
-
-  orders Order[] // Relation field
-  bill   Bill? // Relation field (A session results in one bill)
-
-  @@index([tableId])
-  @@index([reservationId])
-  @@index([staffIdOpenedBy])
   @@map("dining_sessions")
 }
 
+enum DiningSessionStatus {
+  ACTIVE   // Party is currently seated and ordering/eating
+  BILLED   // Bill has been generated for this session
+  CLOSED   // Payment complete, session ended
+}
+
 model Order {
-  id        Int         @id @default(autoincrement())
-  orderTime DateTime    @default(now())
-  status    OrderStatus @default(Pending)
-  notes     String?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id                String      @id @default(uuid())
+  diningSessionId   String
+  diningSession     DiningSession @relation(fields: [diningSessionId], references: [id])
+  staffIdTakenBy    String
+  takenBy           Staff       @relation("TakenByStaff", fields: [staffIdTakenBy], references: [id])
+  orderTime         DateTime    @default(now())
+  status            OrderStatus @default(PENDING)
+  notes             String?     // Overall order notes (e.g., "serve all at once")
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  items             OrderItem[] // Relation to OrderItem
 
-  diningSession DiningSession @relation(fields: [sessionId], references: [id])
-  sessionId     Int
-
-  takenBy        Staff @relation("TakenByStaff", fields: [staffIdTakenBy], references: [id])
-  staffIdTakenBy Int
-
-  items OrderItem[] // Relation field
-
-  @@index([sessionId])
-  @@index([staffIdTakenBy])
   @@map("orders")
 }
 
+enum OrderStatus {
+  PENDING           // Order taken, not yet sent to kitchen or kitchen hasn't started
+  PREPARING         // Kitchen is actively working on the order
+  READY             // All items in the order are ready to be served
+  SERVED            // Order has been delivered to the table
+  CANCELLED         // Order was cancelled
+  ACTION_REQUIRED   // An item in the order needs attention (e.g. sold out)
+}
+
 model OrderItem {
-  id               Int             @id @default(autoincrement())
-  quantity         Int
-  priceAtOrderTime Decimal         @db.Decimal(10, 2)
-  specialRequests  String?
-  status           OrderItemStatus @default(Pending)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                  String           @id @default(uuid())
+  orderId             String
+  order               Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId          String
+  menuItem            MenuItem         @relation(fields: [menuItemId], references: [id])
+  quantity            Int
+  priceAtOrderTime    Float            // Store price when ordered, as menu price can change
+  specialRequests     String?
+  status              OrderItemStatus  @default(PENDING) // Status for individual items
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
-  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade) // Delete item if order is deleted
-  orderId Int
-
-  menuItem MenuItem @relation(fields: [itemId], references: [id], onDelete: Restrict) // Prevent deleting menu item if ordered
-  itemId   Int
-
-  @@index([orderId])
-  @@index([itemId])
   @@map("order_items")
 }
 
+enum OrderItemStatus {
+  PENDING       // Item added to order
+  PREPARING     // Kitchen started preparing this specific item
+  READY         // Item is ready
+  SERVED        // Item served
+  CANCELLED     // Item cancelled from order
+  SOLD_OUT      // Item marked as sold out by kitchen after order placed
+}
+
+// New Model for Bill
 model Bill {
-  id                      Int        @id @default(autoincrement())
-  generationTime          DateTime   @default(now())
-  subtotalAmount          Decimal    @db.Decimal(10, 2)
-  taxAmount               Decimal    @default(0.00) @db.Decimal(10, 2)
-  discountAmount          Decimal    @default(0.00) @db.Decimal(10, 2)
-  totalAmount             Decimal    @db.Decimal(10, 2) // Should likely be calculated
-  status                  BillStatus @default(Unpaid)
-  paymentConfirmationTime DateTime?
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
+  id                       String    @id @default(uuid())
+  diningSessionId          String    @unique // Each session has one bill
+  diningSession            DiningSession @relation(fields: [diningSessionId], references: [id])
+  staffIdGeneratedBy       String
+  generatedBy              Staff     @relation("GeneratedByStaff", fields: [staffIdGeneratedBy], references: [id])
+  generationTime           DateTime  @default(now())
+  subtotalAmount           Float     // Calculated from served order items
+  taxAmount                Float     @default(0.00) // Can be calculated or configurable
+  discountAmount           Float     @default(0.00) // If discounts are applied
+  totalAmount              Float     // subtotal + tax - discount
+  status                   BillStatus @default(UNPAID)
+  paymentConfirmationTime  DateTime? // When payment was confirmed
+  paymentMethod            String?   // e.g., "Cash", "Credit Card", "Mobile Payment"
+  notes                    String?   // Any notes related to the bill or payment
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  diningSession DiningSession @relation(fields: [sessionId], references: [id])
-  sessionId     Int           @unique // Enforce one bill per session
-
-  generatedBy        Staff @relation("GeneratedByStaff", fields: [staffIdGeneratedBy], references: [id])
-  staffIdGeneratedBy Int
-
-  @@index([sessionId])
-  @@index([staffIdGeneratedBy])
   @@map("bills")
+}
+
+enum BillStatus {
+  UNPAID
+  PAID
+  VOID // If a bill was generated incorrectly and then voided
 }
