@@ -1,6 +1,6 @@
 // ./backend/src/services/orderService.js
 import prisma from '../db/prismaClient.js';
-import { OrderStatus, OrderItemStatus, DiningSessionStatus, StaffRole, MenuItem as PrismaMenuItem, TableStatus } from '@prisma/client'; // Ensure all enums used are imported
+import { OrderStatus, OrderItemStatus, DiningSessionStatus, StaffRole, TableStatus } from '@prisma/client'; // Ensure all enums used are imported
 
 // Define once for consistent responses, especially for includes
 const FULL_ORDER_INCLUDES = {
