@@ -1,288 +1,361 @@
 // ./backend/src/services/orderService.js
 import prisma from '../db/prismaClient.js';
-import { OrderStatus, OrderItemStatus, DiningSessionStatus} from '@prisma/client';
+import { OrderStatus, OrderItemStatus, DiningSessionStatus, StaffRole, MenuItem as PrismaMenuItem, TableStatus } from '@prisma/client'; // Ensure all enums used are imported
 
-const validOrderStatusTransitions = {
-  [OrderStatus.PENDING]: [OrderStatus.PREPARING, OrderStatus.CANCELLED, OrderStatus.ACTION_REQUIRED],
-  [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.ACTION_REQUIRED], // Or back to PENDING if kitchen rejects
-  [OrderStatus.ACTION_REQUIRED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED], // If items resolved
-  [OrderStatus.READY]: [OrderStatus.SERVED, OrderStatus.CANCELLED], // Cannot go back to preparing easily once fully ready
-  [OrderStatus.SERVED]: [], // Terminal state for active flow, only CANCELLED if error/void
-  [OrderStatus.CANCELLED]: [], // Terminal state
+// Define once for consistent responses, especially for includes
+const FULL_ORDER_INCLUDES = {
+  items: {
+    include: { menuItem: { select: { id: true, name: true, price: true, isAvailable: true } } },
+    orderBy: { createdAt: 'asc' }
+  },
+  takenBy: { select: { id: true, name: true, role: true } },
+  diningSession: {
+    include: {
+      table: { select: { id: true, tableNumber: true } }
+    }
+  }
 };
 
+// --- Helper: Valid Status Transitions (adjust as per your exact business rules) ---
+const validOrderStatusTransitions = {
+    [OrderStatus.PENDING]: [OrderStatus.PREPARING, OrderStatus.CANCELLED, OrderStatus.ACTION_REQUIRED],
+    [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.ACTION_REQUIRED],
+    [OrderStatus.ACTION_REQUIRED]: [OrderStatus.PREPARING, OrderStatus.PENDING, OrderStatus.CANCELLED], // After waiter fixes it
+    [OrderStatus.READY]: [OrderStatus.SERVED, OrderStatus.CANCELLED],
+    [OrderStatus.SERVED]: [OrderStatus.CANCELLED], // Allow cancellation of served for void/correction
+    [OrderStatus.CANCELLED]: [],
+};
 
 const validOrderItemStatusTransitions = {
-  [OrderItemStatus.PENDING]: [OrderItemStatus.PREPARING, OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT],
-  [OrderItemStatus.PREPARING]: [OrderItemStatus.READY, OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT],
-  [OrderItemStatus.SOLD_OUT]: [OrderItemStatus.CANCELLED], // If customer wants to remove it
-  [OrderItemStatus.READY]: [OrderItemStatus.SERVED, OrderItemStatus.CANCELLED],
-  [OrderItemStatus.SERVED]: [],
-  [OrderItemStatus.CANCELLED]: [],
+    [OrderItemStatus.PENDING]: [OrderItemStatus.PREPARING, OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT],
+    [OrderItemStatus.PREPARING]: [OrderItemStatus.READY, OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT],
+    [OrderItemStatus.SOLD_OUT]: [OrderItemStatus.CANCELLED], // Waiter can cancel a sold out item
+    [OrderItemStatus.READY]: [OrderItemStatus.SERVED, OrderItemStatus.CANCELLED],
+    [OrderItemStatus.SERVED]: [OrderItemStatus.CANCELLED], // Allow cancellation for void/correction
+    [OrderItemStatus.CANCELLED]: [],
 };
 
+// --- Helper: Function to synchronize order status based on its items ---
 export const syncOrderStatusBasedOnItems = async (orderId, txClient = prisma) => {
-  const order = await txClient.order.findUnique({
-      where: { id: orderId },
-      include: { items: { select: { status: true } } }
-  });
-
-  if (!order || !order.items.length) return null; // Or handle as error
-
-  const itemStatuses = order.items.map(item => item.status);
-
-  let newOrderStatus = order.status;
-
-  if (itemStatuses.every(s => s === OrderItemStatus.CANCELLED)) {
-      newOrderStatus = OrderStatus.CANCELLED;
-  } else if (itemStatuses.some(s => s === OrderItemStatus.SOLD_OUT)) {
-      newOrderStatus = OrderStatus.ACTION_REQUIRED;
-  } else if (itemStatuses.every(s => s === OrderItemStatus.SERVED || s === OrderItemStatus.CANCELLED)) {
-      newOrderStatus = OrderStatus.SERVED;
-  } else if (itemStatuses.every(s => s === OrderItemStatus.READY || s === OrderItemStatus.SERVED || s === OrderItemStatus.CANCELLED)) {
-      newOrderStatus = OrderStatus.READY;
-  } else if (itemStatuses.some(s => s === OrderItemStatus.PREPARING || s === OrderItemStatus.READY || s === OrderItemStatus.SERVED)) {
-      if(order.status === OrderStatus.PENDING) newOrderStatus = OrderStatus.PREPARING; // Move to preparing if any item is
-  }
-  // If it was ACTION_REQUIRED and all SOLD_OUT are now CANCELLED, re-evaluate
-  else if (order.status === OrderStatus.ACTION_REQUIRED && !itemStatuses.some(s => s === OrderItemStatus.SOLD_OUT)) {
-     // Re-evaluate based on remaining PENDING/PREPARING/READY/SERVED items
-     // This part can get complex, might need to check if all remaining items are PENDING to go back to PENDING, etc.
-     // For simplicity now, if no SOLD_OUT, and not all SERVED/READY, assume PREPARING or PENDING based on items.
-     if (itemStatuses.every(s => s === OrderItemStatus.PENDING || s === OrderItemStatus.CANCELLED)) {
-         newOrderStatus = OrderStatus.PENDING;
-     } else {
-         newOrderStatus = OrderStatus.PREPARING; // Default to PREPARING if mix
-     }
-  }
-
-
-  if (newOrderStatus !== order.status) {
-    return txClient.order.update({
+    const currentOrder = await txClient.order.findUnique({
         where: { id: orderId },
-        data: { status: newOrderStatus },
-        include: { // <<< ENSURE THIS INCLUDE IS HERE
-            items: { include: { menuItem: { select: { id: true, name: true, price: true } } }, orderBy: {createdAt: 'asc'} },
-            takenBy: { select: { id: true, name: true } },
-            diningSession: { include: { table: { select: { id: true, tableNumber: true } } } }
-        }
+        include: { items: { select: { status: true, id: true } } }
     });
-}
-// If no status change, refetch the order with full includes to be consistent
-return txClient.order.findUnique({
-    where: {id: orderId},
-    include: {
-        items: { include: { menuItem: { select: { id: true, name: true, price: true } } }, orderBy: {createdAt: 'asc'} },
-        takenBy: { select: { id: true, name: true } },
-        diningSession: { include: { table: { select: { id: true, tableNumber: true } } } }
+
+    if (!currentOrder) {
+        console.warn(`syncOrderStatus: Order ${orderId} not found during sync.`);
+        return null;
     }
-});
+    if (!currentOrder.items) {
+        console.warn(`syncOrderStatus: Order ${orderId} has no items field. Current status: ${currentOrder.status}`);
+        return txClient.order.findUnique({ where: {id: orderId}, include: FULL_ORDER_INCLUDES });
+    }
+
+    let newOrderStatus = currentOrder.status;
+    const activeItems = currentOrder.items.filter(item => item.status !== OrderItemStatus.CANCELLED);
+    const itemStatuses = activeItems.map(item => item.status);
+
+
+    if (activeItems.length === 0 && currentOrder.status !== OrderStatus.CANCELLED) {
+        newOrderStatus = OrderStatus.CANCELLED;
+    } else if (itemStatuses.some(s => s === OrderItemStatus.SOLD_OUT)) {
+        newOrderStatus = OrderStatus.ACTION_REQUIRED;
+    } else if (itemStatuses.length > 0 && itemStatuses.every(s => s === OrderItemStatus.SERVED)) {
+        newOrderStatus = OrderStatus.SERVED;
+    } else if (itemStatuses.length > 0 && itemStatuses.every(s => s === OrderItemStatus.READY || s === OrderItemStatus.SERVED)) {
+        newOrderStatus = OrderStatus.READY;
+    } else if (itemStatuses.some(s => s === OrderItemStatus.PREPARING || s === OrderItemStatus.READY || s === OrderItemStatus.SERVED)) {
+        if (currentOrder.status === OrderStatus.PENDING || currentOrder.status === OrderStatus.ACTION_REQUIRED) {
+          newOrderStatus = OrderStatus.PREPARING;
+        }
+    } else if (itemStatuses.length > 0 && itemStatuses.every(s => s === OrderItemStatus.PENDING)) {
+        if (currentOrder.status === OrderStatus.ACTION_REQUIRED || currentOrder.status === OrderStatus.PREPARING) {
+          newOrderStatus = OrderStatus.PENDING;
+        }
+    } else if (currentOrder.status === OrderStatus.ACTION_REQUIRED && itemStatuses.length > 0 && !itemStatuses.some(s => s === OrderItemStatus.SOLD_OUT)) {
+        // If it was ACTION_REQUIRED, and no more SOLD_OUT items, try to revert to PENDING or PREPARING
+        if (itemStatuses.every(s => s === OrderItemStatus.PENDING)) {
+            newOrderStatus = OrderStatus.PENDING;
+        } else if (itemStatuses.some(s => s === OrderItemStatus.PREPARING || s === OrderItemStatus.READY || s === OrderItemStatus.SERVED)) {
+            newOrderStatus = OrderStatus.PREPARING;
+        } else {
+             newOrderStatus = OrderStatus.PENDING; // Default if all items are PENDING after resolution
+        }
+    }
+
+
+    if (newOrderStatus !== currentOrder.status) {
+        return txClient.order.update({
+            where: { id: orderId },
+            data: { status: newOrderStatus },
+            include: FULL_ORDER_INCLUDES
+        });
+    }
+    return txClient.order.findUnique({
+        where: { id: orderId },
+        include: FULL_ORDER_INCLUDES
+    });
 };
 
-
-
-export const createOrderForSession = async (sessionId, itemsData, staffId) => {
-  if (!itemsData || itemsData.length === 0) {
+// --- createOrderForSession ---
+export const createOrderForSession = async (sessionId, orderData, staffId) => {
+  const { items: itemsInput, notes } = orderData;
+  if (!itemsInput || !Array.isArray(itemsInput) || itemsInput.length === 0) {
     throw new Error('Order must contain at least one item.');
   }
 
-  // Start a transaction to ensure atomicity
   return prisma.$transaction(async (tx) => {
-    const diningSession = await tx.diningSession.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!diningSession) {
-      throw new Error('Dining session not found.');
-    }
+    const diningSession = await tx.diningSession.findUnique({ where: { id: sessionId } });
+    if (!diningSession) throw new Error('Dining session not found.');
     if (diningSession.status !== DiningSessionStatus.ACTIVE) {
       throw new Error(`Cannot add order to session with status: ${diningSession.status}`);
     }
 
-    // Fetch all menu items at once to validate and get current prices
-    const menuItemIds = itemsData.map(item => item.menuItemId);
+    const menuItemIds = itemsInput.map(item => item.menuItemId);
     const menuItemsDb = await tx.menuItem.findMany({
-      where: {
-        id: { in: menuItemIds },
-        isAvailable: true, // Only allow ordering available items
-      },
+      where: { id: { in: menuItemIds }, isAvailable: true },
     });
-
-    // Create a map for easy lookup
     const menuItemMap = new Map(menuItemsDb.map(item => [item.id, item]));
 
-    // Validate items and prepare order item data
-    const orderItemsToCreate = itemsData.map(itemInput => {
+    const orderItemsToCreate = itemsInput.map(itemInput => {
       const menuItem = menuItemMap.get(itemInput.menuItemId);
-      if (!menuItem) {
-        throw new Error(`Menu item with ID ${itemInput.menuItemId} not found or is unavailable.`);
-      }
-      if (!itemInput.quantity || itemInput.quantity <= 0) {
-        throw new Error(`Invalid quantity for menu item: ${menuItem.name}`);
-      }
+      if (!menuItem) throw new Error(`Menu item ID ${itemInput.menuItemId} not found or is unavailable.`);
+      if (!itemInput.quantity || itemInput.quantity <= 0) throw new Error(`Invalid quantity for ${menuItem.name}.`);
       return {
         menuItemId: menuItem.id,
         quantity: itemInput.quantity,
-        priceAtOrderTime: menuItem.price, // Store current price
+        priceAtOrderTime: menuItem.price,
         specialRequests: itemInput.specialRequests || null,
-        status: OrderItemStatus.PENDING, // Initial status for each item
+        status: OrderItemStatus.PENDING,
       };
     });
 
-    // Create the Order
     const newOrder = await tx.order.create({
       data: {
         diningSessionId: sessionId,
         staffIdTakenBy: staffId,
-        status: OrderStatus.PENDING, // Initial order status
-        notes: itemsData.notes || null,
-        items: {
-          create: orderItemsToCreate.map(item => ({...item, status: OrderItemStatus.PENDING})), // Ensure item status
-        },
+        status: OrderStatus.PENDING,
+        notes: notes || null,
+        items: { create: orderItemsToCreate },
       },
-      include: {
-        items: { include: { menuItem: { select: { id: true, name: true, price: true } } } },
-        takenBy: { select: { id: true, name: true } },
-        diningSession: { select: { id: true, table: { select: { tableNumber: true } } } },
-      },
+      include: FULL_ORDER_INCLUDES,
     });
-
     return newOrder;
   });
 };
 
+// --- getOrderById ---
 export const getOrderById = async (orderId) => {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      items: { include: { menuItem: true } },
-      takenBy: { select: { id: true, name: true } },
-      diningSession: { include: { table: true } },
-    },
-  });
-  if (!order) throw new Error('Order not found');
-  return order;
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: FULL_ORDER_INCLUDES });
+    if (!order) throw new Error('Order not found');
+    return order;
 };
 
+// --- getAllOrders (for KDS, etc.) ---
 export const getAllOrders = async (filters = {}) => {
-  const whereClause = {};
-  if (filters.status) {
-    const statuses = filters.status.split(',')
-                          .map(s => s.trim().toUpperCase())
-                          .filter(s => Object.values(OrderStatus).includes(s));
-    if (statuses.length > 0) {
-      whereClause.status = { in: statuses };
+    const whereClause = {};
+    if (filters.status) {
+        const statuses = filters.status.split(',')
+                            .map(s => s.trim().toUpperCase())
+                            .filter(s => Object.values(OrderStatus).includes(s));
+        if (statuses.length > 0) whereClause.status = { in: statuses };
     }
-  }
-  if (filters.diningSessionId) { // If filtering by session ID directly
-    whereClause.diningSessionId = filters.diningSessionId;
-  }
-  // Add other filters like date range if needed for kitchen view
+    if (filters.diningSessionId) whereClause.diningSessionId = filters.diningSessionId;
 
-  return prisma.order.findMany({
-    where: whereClause,
-    include: {
-      items: {
-        include: {
-          menuItem: { select: { id: true, name: true, price: true } } // Select specific menuItem fields
-        },
-        orderBy: { createdAt: 'asc' } // Order items within an order
-      },
-      takenBy: { select: { id: true, name: true } },
-      // CRITICAL CHANGE: Include diningSession and its related table
-      diningSession: {
-        include: {
-          table: { select: { id: true, tableNumber: true } } // Select specific table fields
-        }
-      }
-    },
-    orderBy: { orderTime: 'asc' } // Order the main list of orders
-  });
+    return prisma.order.findMany({ where: whereClause, include: FULL_ORDER_INCLUDES, orderBy: { orderTime: 'asc' } });
 };
 
+// --- updateOrderStatus (Handles Top-Down Cascade) ---
 export const updateOrderStatus = async (orderId, newStatus, staffId) => {
   if (!Object.values(OrderStatus).includes(newStatus)) {
     throw new Error(`Invalid order status: ${newStatus}`);
   }
-  const order = await prisma.order.findUnique({ where: { id: orderId }});
-  if (!order) throw new Error('Order not found.');
 
-  const allowedTransitions = validOrderStatusTransitions[order.status] || [];
-  if (!allowedTransitions.includes(newStatus) && order.status !== newStatus) {
-      throw new Error(`Invalid status transition from ${order.status} to ${newStatus}.`);
-  }
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: { select: {id: true, status: true }} } // Select only what's needed for cascade logic
+    });
+    if (!order) throw new Error('Order not found.');
 
-  // If staff is marking Order as SERVED or READY, all items should also be marked.
-  // This can be complex: either enforce it here, or assume UI/workflow handles item statuses first.
-  // For now, we update the order status directly. A more robust system might:
-  // 1. Iterate items and update their status to SERVED/READY if not already CANCELLED.
-  // 2. Then update the order status.
-  if (newStatus === OrderStatus.SERVED || newStatus === OrderStatus.READY) {
-    // A simplified approach for now. A real system might ensure item statuses are compatible.
-    console.warn(`Order ${orderId} marked as ${newStatus}. Ensure all items are appropriately updated.`);
-  }
+    const allowedTransitions = validOrderStatusTransitions[order.status] || [];
+    if (!allowedTransitions.includes(newStatus) && order.status !== newStatus) {
+        throw new Error(`Invalid status transition for order from ${order.status} to ${newStatus}.`);
+    }
 
+    let itemStatusToSet = null;
+    let applicableItemCurrentStatuses = [];
 
-  return prisma.order.update({
-    where: { id: orderId },
-    data: { status: newStatus },
-    include: {
-      items: {
-        include: {
-          menuItem: { select: { id: true, name: true, price: true } }
-        },
-        orderBy: { createdAt: 'asc' }
-      },
-      takenBy: { select: { id: true, name: true } },
-      diningSession: {
-        include: {
-          table: { select: { id: true, tableNumber: true } }
-        }
+    if (newStatus === OrderStatus.PREPARING) {
+        itemStatusToSet = OrderItemStatus.PREPARING;
+        applicableItemCurrentStatuses = [OrderItemStatus.PENDING];
+    } else if (newStatus === OrderStatus.READY) {
+        itemStatusToSet = OrderItemStatus.READY;
+        applicableItemCurrentStatuses = [OrderItemStatus.PENDING, OrderItemStatus.PREPARING];
+    } else if (newStatus === OrderStatus.SERVED) {
+        itemStatusToSet = OrderItemStatus.SERVED;
+        applicableItemCurrentStatuses = [OrderItemStatus.PENDING, OrderItemStatus.PREPARING, OrderItemStatus.READY];
+    } else if (newStatus === OrderStatus.CANCELLED) {
+        itemStatusToSet = OrderItemStatus.CANCELLED;
+        applicableItemCurrentStatuses = Object.values(OrderItemStatus).filter(s => s !== OrderItemStatus.SERVED);
+    }
+
+    if (itemStatusToSet) {
+      const itemIdsToUpdate = order.items
+        .filter(item => applicableItemCurrentStatuses.includes(item.status))
+        .map(item => item.id);
+
+      if (itemIdsToUpdate.length > 0) {
+        await tx.orderItem.updateMany({
+          where: { id: { in: itemIdsToUpdate } },
+          data: { status: itemStatusToSet },
+        });
       }
-    },
+    }
+
+    // Update the order status itself
+    await tx.order.update({
+      where: { id: orderId },
+      data: { status: newStatus }
+    });
+
+    // Re-sync to ensure final consistency and get full includes for response
+    return syncOrderStatusBasedOnItems(orderId, tx);
   });
 };
 
-
+// --- updateOrderItemStatus (Handles Item-Specific Changes & SOLD_OUT Propagation) ---
 export const updateOrderItemStatus = async (orderItemId, newStatus, reason = null, staffId) => {
   if (!Object.values(OrderItemStatus).includes(newStatus)) {
     throw new Error(`Invalid order item status: ${newStatus}`);
   }
-  const orderItem = await prisma.orderItem.findUnique({
-    where: {id: orderItemId},
-    include: { order: true }
-  });
-  if(!orderItem) throw new Error('Order item not found.');
 
-  const allowedTransitions = validOrderItemStatusTransitions[orderItem.status] || [];
-   if (!allowedTransitions.includes(newStatus) && orderItem.status !== newStatus) {
-      throw new Error(`Invalid item status transition from ${orderItem.status} to ${newStatus}.`);
-  }
+  return prisma.$transaction(async (tx) => {
+    const orderItem = await tx.orderItem.findUnique({
+      where: {id: orderItemId},
+      include: { order: true, menuItem: true }
+    });
+    if(!orderItem) throw new Error('Order item not found.');
 
-  const updatedItem = await prisma.orderItem.update({
-    where: { id: orderItemId },
-    data: { status: newStatus /*, reasonForStatus: reason */ },
-    include: { // Return the menuItem for context in UI updates
-        menuItem: { select: {id: true, name: true, price: true} }
+    const allowedTransitions = validOrderItemStatusTransitions[orderItem.status] || [];
+     if (!allowedTransitions.includes(newStatus) && orderItem.status !== newStatus) {
+        throw new Error(`Invalid item status transition from ${orderItem.status} to ${newStatus}.`);
     }
-});
 
-// IMPORTANT: syncOrderStatusBasedOnItems should ideally return the FULL order object
-// with all necessary includes if the order status actually changes.
-// Or, the frontend thunk for updateOrderItemStatus should refetch the parent order
-// if the parent order's status might have changed.
-// For now, let's assume syncOrderStatusBasedOnItems might just return the updated order object.
-const updatedOrder = await syncOrderStatusBasedOnItems(orderItem.orderId);
+    const itemUpdateData = { status: newStatus };
+    // If you add a 'reasonForStatus' field to OrderItem schema:
+    // if (reason) itemUpdateData.reasonForStatus = reason;
 
-// If syncOrderStatusBasedOnItems doesn't return the full order with all includes,
-// the frontend reducer for updateOrderItemStatus.fulfilled might need to just update
-// the item and then trigger a re-fetch of the parent order for full consistency.
-// Alternatively, the backend here could return both updatedItem and the potentially updated parentOrder (fully populated).
-// Let's assume for now the frontend primarily cares about the item update from this specific thunk.
-// The updateOrderStatus.fulfilled reducer in Redux is responsible for the full order object.
+    await tx.orderItem.update({
+      where: { id: orderItemId },
+      data: itemUpdateData,
+    });
 
-return updatedItem; // This only returns the item.
-                    // Consider returning the full parent order if its status changes.
+    if (newStatus === OrderItemStatus.SOLD_OUT) {
+      // Propagate SOLD_OUT to other pending/preparing items of the same menuItem
+      const otherAffectedItems = await tx.orderItem.findMany({
+        where: {
+          menuItemId: orderItem.menuItemId,
+          id: { not: orderItemId },
+          order: { status: { in: [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.ACTION_REQUIRED] } },
+          status: { in: [OrderItemStatus.PENDING, OrderItemStatus.PREPARING]}
+        }
+      });
+
+      if (otherAffectedItems.length > 0) {
+        const otherItemIds = otherAffectedItems.map(i => i.id);
+        await tx.orderItem.updateMany({
+          where: { id: { in: otherItemIds } },
+          data: { status: OrderItemStatus.SOLD_OUT /*, reasonForStatus: reason || "Propagated sold out" */ },
+        });
+        // Sync parent orders of these other affected items
+        const affectedParentOrderIds = [...new Set(otherAffectedItems.map(i => i.orderId))];
+        for (const parentOrderId of affectedParentOrderIds) {
+            if (parentOrderId !== orderItem.orderId) { // Avoid double sync if it's the same order
+                 await syncOrderStatusBasedOnItems(parentOrderId, tx);
+            }
+        }
+      }
+      // Optionally mark the MenuItem itself as generally unavailable
+      // await tx.menuItem.update({ where: {id: orderItem.menuItemId}, data: {isAvailable: false }});
+    }
+
+    // Always re-evaluate and sync the original item's parent order status.
+    return syncOrderStatusBasedOnItems(orderItem.orderId, tx);
+  });
 };
 
+// --- resolveActionRequiredOrder (Waiter Fixes Order) ---
+export const resolveActionRequiredOrder = async (orderId, resolutionData, staffId) => {
+  const { itemsToCancelIds = [], itemsToUpdate = [], itemsToAdd = [] } = resolutionData;
 
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+        where: {id: orderId},
+        include: { items: { include: { menuItem: true } } } // Include menuItem for price and availability
+    });
+
+    if (!order) throw new Error('Order not found.');
+    if (order.status !== OrderStatus.ACTION_REQUIRED) {
+        throw new Error('Order is not in ACTION_REQUIRED state. Cannot apply resolution.');
+    }
+
+    // 1. Cancel items marked for cancellation (includes original SOLD_OUT ones if requested)
+    if (itemsToCancelIds.length > 0) {
+        await tx.orderItem.updateMany({
+            where: { id: { in: itemsToCancelIds }, orderId: orderId },
+            data: { status: OrderItemStatus.CANCELLED }
+        });
+    }
+
+    // 2. Update existing items (quantity, special requests) - for items NOT being cancelled
+    for (const itemUpdate of itemsToUpdate) {
+        const { orderItemId, quantity, specialRequests } = itemUpdate;
+        // Ensure this item is not in itemsToCancelIds
+        if (itemsToCancelIds.includes(orderItemId)) continue;
+
+        const existingItem = order.items.find(i => i.id === orderItemId);
+        if (!existingItem) throw new Error(`Item ${orderItemId} to update not found in order ${orderId}.`);
+        if (quantity <= 0) throw new Error(`Quantity for item ${existingItem.menuItem.name} must be positive.`);
+
+        await tx.orderItem.update({
+            where: { id: orderItemId },
+            data: {
+                quantity,
+                specialRequests: specialRequests || existingItem.specialRequests,
+                // Status will be reset by syncOrderStatusBasedOnItems, or set explicitly to PENDING if needed
+                // For now, let sync handle it. Or set PENDING here if desired.
+            }
+        });
+    }
+
+    // 3. Add new items
+    if (itemsToAdd.length > 0) {
+        const menuItemIds = itemsToAdd.map(item => item.menuItemId);
+        const menuItemsDb = await tx.menuItem.findMany({
+          where: { id: { in: menuItemIds }, isAvailable: true },
+        });
+        const menuItemMap = new Map(menuItemsDb.map(item => [item.id, item]));
+
+        const newOrderItemsData = itemsToAdd.map(itemInput => {
+            const menuItem = menuItemMap.get(itemInput.menuItemId);
+            if (!menuItem) throw new Error(`New menu item ID ${itemInput.menuItemId} for reorder not found or unavailable.`);
+            if (!itemInput.quantity || itemInput.quantity <= 0) throw new Error(`Invalid quantity for new item ${menuItem.name}.`);
+            return {
+                menuItemId: menuItem.id,
+                quantity: itemInput.quantity,
+                priceAtOrderTime: menuItem.price,
+                specialRequests: itemInput.specialRequests || null,
+                status: OrderItemStatus.PENDING, // New items start as PENDING
+            };
+        });
+        await tx.order.update({
+            where: { id: orderId },
+            data: { items: { create: newOrderItemsData } }
+        });
+    }
+
+    // 4. After all modifications, re-sync the parent order's status.
+    return syncOrderStatusBasedOnItems(orderId, tx);
+  });
+};

@@ -37,4 +37,10 @@ router.patch(
   orderController.updateOrderStatusHandler
 );
 
+router.put(
+  '/:orderId/resolve', // Or just PUT /:orderId if that's your preferred style for this type of update
+  authorizeRoles(StaffRole.WAITER, StaffRole.MANAGER, StaffRole.CASHIER), // Roles that handle customer interaction
+  orderController.resolveActionRequiredOrderHandler
+);
+
 export default router;
