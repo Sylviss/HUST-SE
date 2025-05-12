@@ -1,10 +1,21 @@
+/* ./frontend/src/App.css */
+
+/* REMOVE OR COMMENT OUT this #root block entirely.
+   The #root styling is now handled in index.css for full-screen span.
+*/
+/*
 #root {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
 }
+*/
 
+/* The following are styles for the Vite demo.
+   You can safely REMOVE all of these if you are building your own application layout.
+*/
+/*
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -40,3 +51,4 @@
 .read-the-docs {
   color: #888;
 }
+*/

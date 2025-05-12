@@ -6,6 +6,14 @@ import { StaffRole } from '@prisma/client';
 
 const router = express.Router();
 
+router.get(
+  '/all-for-admin', // Changed path
+  isAuthenticated,
+  isManager,
+  menuItemController.getAllMenuItemsHandler // This handler needs to know not to filter by isAvailable by default
+);
+
+
 // Public route: Anyone can view available menu items
 router.get('/', menuItemController.getAllMenuItemsHandler); // No auth needed for basic GET
                                                         // Could add a separate /admin/menu-items for managers to see all

@@ -1,11 +1,67 @@
 // ./frontend/src/pages/DashboardPage.jsx
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchTables, clearTableError } from '../store/slices/tableSlice';
 
 function DashboardPage() {
+  const dispatch = useDispatch();
+  const { staff } = useSelector((state) => state.auth);
+  const { items: tables, isLoading, error } = useSelector((state) => state.tables);
+
+  useEffect(() => {
+    // Fetch tables when the component mounts
+    dispatch(fetchTables());
+    
+    // Optional: Clear error when component unmounts or on new fetch
+    return () => {
+        dispatch(clearTableError());
+    }
+  }, [dispatch]);
+
+  if (!staff) {
+    return <p>Loading user information...</p>; // Or redirect if not authenticated
+  }
+
   return (
-    <div>
-      <h1>Staff Dashboard</h1>
-      {/* Dashboard content will go here */}
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">
+        Welcome to the Staff Dashboard, {staff.name}!
+      </h1>
+      <p className="mb-4 text-lg text-gray-700 dark:text-gray-300">Your role: {staff.role}</p>
+
+      <div className="mt-8">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Restaurant Tables</h2>
+        {isLoading && <p className="text-blue-500">Loading tables...</p>}
+        {error && <p className="text-red-500">Error fetching tables: {error}</p>}
+        {!isLoading && !error && tables.length === 0 && (
+          <p className="text-gray-600 dark:text-gray-400">No tables found. Managers can add tables via the admin section.</p>
+        )}
+        {!isLoading && !error && tables.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {tables.map((table) => (
+              <div
+                key={table.id}
+                className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6"
+              >
+                <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+                  Table: {table.tableNumber}
+                </h3>
+                <p className="text-gray-700 dark:text-gray-300">Capacity: {table.capacity}</p>
+                <p className={`font-semibold ${
+                    table.status === 'AVAILABLE' ? 'text-green-500' :
+                    table.status === 'OCCUPIED' ? 'text-red-500' :
+                    table.status === 'RESERVED' ? 'text-yellow-500' :
+                    'text-gray-500'
+                  }`}
+                >
+                  Status: {table.status}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* More dashboard widgets will go here */}
     </div>
   );
 }

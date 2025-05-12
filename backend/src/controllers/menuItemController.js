@@ -15,14 +15,23 @@ export const createMenuItemHandler = async (req, res, next) => {
 
 export const getAllMenuItemsHandler = async (req, res, next) => {
   try {
-    // Example of allowing a filter for public vs. admin views
     let filters = {};
-    if (req.query.availableOnly === 'true') {
+    // Check if this is the specific admin path or if the user is a manager and no specific filter is set
+    if (req.path.endsWith('/all-for-admin') && req.staff?.role === 'MANAGER') {
+      // No default availability filter for this admin path
+      if (req.query.isAvailable === 'true') filters.isAvailable = true;
+      else if (req.query.isAvailable === 'false') filters.isAvailable = false;
+    } else {
+      // Default for '/' path, or if not the admin path
+      filters.isAvailable = true; // Default to available items
+      if (req.query.availableOnly === 'false' && req.staff?.role === 'MANAGER') {
+        // Manager explicitly requested all items via the public path
+        delete filters.isAvailable;
+      } else if (req.query.availableOnly === 'true') {
         filters.isAvailable = true;
+      }
     }
-    // For admin view (isManager), they see all items by default or based on other filters
-    // For public/waiter view, you might always enforce filters.isAvailable = true
-    // This logic can be refined based on who is calling
+    // console.log(`getAllMenuItemsHandler: path=${req.path}, query=${JSON.stringify(req.query)}, appliedFilters=${JSON.stringify(filters)}`);
     const menuItems = await menuItemService.getAllMenuItems(filters);
     res.status(200).json(menuItems);
   } catch (error) {

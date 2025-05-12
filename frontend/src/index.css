@@ -1,11 +1,38 @@
+/* ./frontend/src/index.css */
+
+/* Tailwind Directives - KEEP THESE AT THE TOP */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset and Full Screen Setup */
+html,
+body,
+#root {
+  height: 100%; /* Or use min-height: 100vh on body and #root if preferred */
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box; /* Recommended for easier layout management */
+}
+
+*, *::before, *::after {
+  box-sizing: inherit; /* Ensure all elements inherit box-sizing */
+}
+
+/* Keep your preferred base font settings */
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
+  /* color-scheme and default colors will likely be managed by Tailwind's dark mode
+     or your component styles. You can keep these as a fallback or remove them. */
+  /*
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
+  */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,28 +40,23 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* The default link styles from Vite can be kept or removed if Tailwind handles them adequately for you */
 a {
   font-weight: 500;
-  color: #646cff;
+  color: #646cff; /* Vite default */
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: #535bf2; /* Vite default */
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
+/* The default h1 styles from Vite */
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
 
+/* The default button styles from Vite can be kept as a base or removed if using Tailwind buttons */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -42,18 +64,20 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  /* background-color: #1a1a1a; */ /* Often overridden by Tailwind or component styles */
   cursor: pointer;
   transition: border-color 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  /* border-color: #646cff; */ /* Often overridden */
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* The light theme defaults from Vite. Tailwind's dark mode utilities are usually preferred. */
+/*
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
@@ -66,3 +90,4 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+*/
