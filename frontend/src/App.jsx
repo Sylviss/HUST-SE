@@ -19,6 +19,9 @@ import TableMapPage from './pages/staff/TableMapPage'; // Import
 import OrderTakingPage from './pages/staff/OrderTakingPage'; // Import
 import ActiveSessionsPage from './pages/staff/ActiveSessionsPage'; // Import
 import KitchenDisplayPage from './pages/staff/KitchenDisplayPage'; // Import
+import ServingQueuePage from './pages/staff/ServingQueuePage'; // 
+import BillingPage from './pages/staff/BillingPage'; // Import
+
 
 
 
@@ -40,7 +43,9 @@ function App() {
   const canTakeOrders = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER; // Define who can take orders
   const canManageOrdersAndSessions = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER;
   const isKitchenOrManager = staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.MANAGER;
-  
+  const canServeOrders = staff?.role === StaffRole.WAITER || staff?.role === StaffRole.MANAGER;
+  const canProcessBills = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.WAITER;
+
   return (
     // Use Tailwind classes for a full-height flex column layout
     <div className="flex flex-col min-h-screen w-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -81,6 +86,11 @@ function App() {
             {isAuthenticated && isKitchenOrManager && (
               <Link to="/staff/kitchen" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">
                 Kitchen Display
+              </Link>
+            )}
+            {isAuthenticated && canServeOrders && (
+              <Link to="/staff/serving-queue" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 ml-6">
+                Serving Queue
               </Link>
             )}
             {/* Add more primary navigation links here as needed, following the pattern */}
@@ -135,6 +145,13 @@ function App() {
             </Route>
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.KITCHEN_STAFF, StaffRole.MANAGER]} />}>
               <Route path="/staff/kitchen" element={<KitchenDisplayPage />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.WAITER, StaffRole.MANAGER]} />}> {/* Ensure correct roles */}
+              <Route path="/staff/serving-queue" element={<ServingQueuePage />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER, StaffRole.WAITER, StaffRole.CASHIER]} />}>
+              <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} /> {/* Existing */}
+              <Route path="/staff/sessions/:sessionId/bill" element={<BillingPage />} /> {/* NEW Billing Route */}
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />

@@ -53,8 +53,6 @@ function KitchenDisplayPage() {
   // Group orders by status for display (e.g., PENDING vs. PREPARING)
   const pendingOrders = kitchenOrders.filter(o => o.status === OrderStatus.PENDING);
   const preparingOrders = kitchenOrders.filter(o => o.status === OrderStatus.PREPARING);
-  console.log(pendingOrders)
-  console.log(preparingOrders)
 
   return (
     <div className="container mx-auto p-4">

@@ -76,6 +76,22 @@ export const updateOrderItemStatus = createAsyncThunk(
   }
 );
 
+export const fetchReadyToServeOrders = createAsyncThunk(
+  'orders/fetchReadyToServeOrders',
+  async (_, { rejectWithValue }) => {
+    try {
+      // Fetches orders with status READY
+      const response = await apiClient.get('/orders', {
+        params: { status: OrderStatus.READY } // Assumes backend supports this
+      });
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch ready orders';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 const initialState = {
   ordersBySession: {},    // Stores orders keyed by sessionId: { sessionId: [order1, order2] }
   kitchenOrders: [],      // Stores orders for the KDS (PENDING, PREPARING)
@@ -88,6 +104,9 @@ const initialState = {
   submitError: null,
   isUpdatingStatus: false,   // For updateOrderStatus and updateOrderItemStatus thunks
   statusUpdateError: null,
+  readyToServeOrders: [],
+  isLoadingReadyToServe: false,
+  readyToServeError: null,
 };
 
 const orderSlice = createSlice({
@@ -98,6 +117,7 @@ const orderSlice = createSlice({
     clearOrderListError: (state) => { state.listError = null; },
     clearKitchenOrderError: (state) => { state.kitchenError = null; },
     clearOrderStatusUpdateError: (state) => { state.statusUpdateError = null; },
+    clearReadyToServeError: (state) => { state.readyToServeError = null; },
     // This local reducer can be used for immediate UI feedback if desired,
     // but the thunk's fulfilled case will also update the state.
     updateLocalOrderItemStatus: (state, action) => {
@@ -205,6 +225,18 @@ const orderSlice = createSlice({
              state.ordersBySession[updatedOrder.diningSessionId].push(updatedOrder);
           }
         }
+        if (updatedOrder.status === OrderStatus.SERVED) {
+          state.readyToServeOrders = state.readyToServeOrders.filter(o => o.id !== updatedOrder.id);
+        } else if (updatedOrder.status === OrderStatus.READY) {
+          // If it became READY (e.g. from another status not PENDING/PREPARING), add/update it
+          const rIndex = state.readyToServeOrders.findIndex(o => o.id === updatedOrder.id);
+          if (rIndex !== -1) {
+            state.readyToServeOrders[rIndex] = updatedOrder;
+          } else {
+            state.readyToServeOrders.push(updatedOrder);
+            state.readyToServeOrders.sort((a, b) => new Date(a.orderTime) - new Date(b.orderTime));
+          }
+        }
       })
       .addCase(updateOrderStatus.rejected, (state, action) => {
         state.isUpdatingStatus = false; state.statusUpdateError = action.payload;
@@ -246,7 +278,20 @@ const orderSlice = createSlice({
       })
       .addCase(updateOrderItemStatus.rejected, (state, action) => {
         state.isUpdatingStatus = false; state.statusUpdateError = action.payload;
-      });
+      })
+      .addCase(fetchReadyToServeOrders.pending, (state) => {
+        state.isLoadingReadyToServe = true;
+        state.readyToServeError = null;
+      })
+      .addCase(fetchReadyToServeOrders.fulfilled, (state, action) => {
+        state.isLoadingReadyToServe = false;
+        state.readyToServeOrders = action.payload;
+      })
+      .addCase(fetchReadyToServeOrders.rejected, (state, action) => {
+        state.isLoadingReadyToServe = false;
+        state.readyToServeError = action.payload;
+        state.readyToServeOrders = [];
+      })
   },
 });
 
@@ -255,7 +300,8 @@ export const {
   clearOrderListError,
   clearKitchenOrderError,
   clearOrderStatusUpdateError,
-  updateLocalOrderItemStatus
+  updateLocalOrderItemStatus,
+  clearReadyToServeError
 } = orderSlice.actions;
 
 export default orderSlice.reducer;

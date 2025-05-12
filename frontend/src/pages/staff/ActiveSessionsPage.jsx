@@ -15,6 +15,10 @@ function ActiveSessionsPage() {
   } = useSelector((state) => state.diningSessions);
   const { staff } = useSelector((state) => state.auth);
 
+  const handleGoToBilling = (sessionId) => {
+    navigate(`/staff/sessions/${sessionId}/bill`);
+  };
+
   useEffect(() => {
     // Fetch active and billed sessions. Billed might still need attention or order additions.
     dispatch(fetchAllDiningSessions({ status: `${DiningSessionStatus.ACTIVE},${DiningSessionStatus.BILLED}` }));
@@ -54,11 +58,27 @@ function ActiveSessionsPage() {
             <div
               key={session.id}
               className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 cursor-pointer transition-all hover:shadow-xl hover:scale-105"
-              onClick={() => handleViewSessionDetails(session.id)}
+              // onClick={() => handleViewSessionDetails(session.id)}
             >
               <h3 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
                 Table: {session.table?.tableNumber || 'N/A'}
               </h3>
+              <div className="mt-4 space-y-2">
+                <button
+                    onClick={() => navigate(`/staff/sessions/${session.id}/orders/new`)} // Existing order taking
+                    className="w-full text-sm px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
+                >
+                    View/Add Orders
+                </button>
+                {(session.status === DiningSessionStatus.ACTIVE || session.status === DiningSessionStatus.BILLED) && (
+                    <button
+                        onClick={() => handleGoToBilling(session.id)}
+                        className="w-full text-sm px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-md"
+                    >
+                        Process Bill
+                    </button>
+                )}
+              </div>
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Session ID: ...{session.id.slice(-6)}
               </p>
@@ -80,6 +100,7 @@ function ActiveSessionsPage() {
                 Status: {session.status}
               </p>
             </div>
+            
           ))}
         </div>
       )}

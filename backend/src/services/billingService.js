@@ -37,73 +37,90 @@ const calculateBillAmounts = (orders) => {
 };
 
 export const generateBillForSession = async (sessionId, staffId) => {
-  return prisma.$transaction(async (tx) => {
-    const diningSession = await tx.diningSession.findUnique({
-      where: { id: sessionId },
-      include: {
-          orders: {
-              // Fetch all orders that are not CANCELLED to consider for billing
-              where: { status: { not: OrderStatus.CANCELLED } },
-              include: {
-                  items: {
-                      // Fetch all items that are not CANCELLED or SOLD_OUT for calculation
-                      where: { status: { notIn: [OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT] } }
-                  }
-              }
-          },
-          bill: true
+  // Fetch outside transaction or as first step in tx if other operations need to be atomic with it.
+  // For upsert, the main atomicity is on the bill table itself.
+  const diningSession = await prisma.diningSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      orders: { // Ensure you fetch orders and items needed for calculateBillAmounts
+        where: { status: { not: OrderStatus.CANCELLED } }, // Example filter
+        include: {
+            items: {
+                where: { status: { notIn: [OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT] } }
+            }
+        }
       },
+      // No need to include 'bill' here if upsert is based on diningSessionId
+    },
   });
 
-    if (!diningSession) throw new Error('Dining session not found.');
-    if (diningSession.status === DiningSessionStatus.CLOSED) {
-      throw new Error('Cannot generate bill for a closed session.');
-    }
-    if (diningSession.bill && diningSession.bill.status === BillStatus.PAID) {
-      throw new Error('Bill for this session is already paid.');
-    }
+  if (!diningSession) throw new Error('Dining session not found.');
+  if (diningSession.status === DiningSessionStatus.CLOSED) {
+    throw new Error('Cannot generate/regenerate bill for a closed session.');
+  }
 
-    if (!diningSession.orders || diningSession.orders.filter(o => o.status !== OrderStatus.CANCELLED && o.items.length > 0).length === 0) {
-      console.warn(`Attempting to generate bill for session ${sessionId} with no billable orders.`);
-    }
+  // Check if a PAID bill already exists for this session *before* attempting upsert.
+  const existingPaidBill = await prisma.bill.findFirst({
+      where: { diningSessionId: sessionId, status: BillStatus.PAID }
+  });
+  if (existingPaidBill) {
+      throw new Error('Bill for this session is already paid and cannot be regenerated.');
+  }
 
-    const amounts = calculateBillAmounts(diningSession.orders);
+  const amounts = calculateBillAmounts(diningSession.orders);
 
-    let bill;
-    if (diningSession.bill) { // Bill exists, update it (e.g. if more items were added)
-      bill = await tx.bill.update({
-        where: { id: diningSession.bill.id },
-        data: {
-          ...amounts,
-          staffIdGeneratedBy: staffId, // Update who last generated/updated it
-          generationTime: new Date(), // Update generation time
-          status: BillStatus.UNPAID, // Reset to unpaid if re-generating
-        },
-      });
-    } else { // Create a new bill
-      bill = await tx.bill.create({
-        data: {
-          diningSessionId: sessionId,
-          staffIdGeneratedBy: staffId,
-          ...amounts,
-          status: BillStatus.UNPAID,
-        },
-      });
-    }
+  const bill = await prisma.bill.upsert({
+    where: {
+      diningSessionId: sessionId, // The unique constraint for finding/matching
+    },
+    update: { // If a bill for this diningSessionId exists, update these fields
+      subtotalAmount: amounts.subtotalAmount,
+      taxAmount: amounts.taxAmount,
+      discountAmount: amounts.discountAmount,
+      totalAmount: amounts.totalAmount,
+      staffIdGeneratedBy: staffId,
+      generationTime: new Date(),
+      status: BillStatus.UNPAID, // Always reset to UNPAID on generate/regenerate
+    },
+    create: { // If no bill for this diningSessionId exists, create with these fields
+      diningSessionId: sessionId,
+      staffIdGeneratedBy: staffId,
+      subtotalAmount: amounts.subtotalAmount,
+      taxAmount: amounts.taxAmount,
+      discountAmount: amounts.discountAmount,
+      totalAmount: amounts.totalAmount,
+      status: BillStatus.UNPAID,
+    },
+  });
 
-    // Update dining session status to BILLED
-    await tx.diningSession.update({
+  // Update dining session status to BILLED if it's not already (and not closed)
+  if (diningSession.status !== DiningSessionStatus.BILLED && diningSession.status !== DiningSessionStatus.CLOSED) {
+    await prisma.diningSession.update({
       where: { id: sessionId },
       data: { status: DiningSessionStatus.BILLED },
     });
+  }
 
-    return tx.bill.findUnique({ // Re-fetch with includes
-        where: { id: bill.id },
-        include: { diningSession: { include: { table: true, orders: {include: { items: {include: {menuItem:true}}}}} }}
-    });
+  // Re-fetch the bill with all includes for a consistent API response
+  return prisma.bill.findUnique({
+      where: { id: bill.id }, // Use the ID from the upserted/created bill
+      include: {
+          diningSession: {
+              include: {
+                  table: { select: { id: true, tableNumber: true }},
+                  orders: {
+                      include: {
+                          items: {
+                              include: { menuItem: { select: { id: true, name: true, price: true }} }
+                          }
+                      }
+                  }
+              }
+          },
+          generatedBy: { select: {id: true, name: true}}
+      }
   });
 };
-
 export const getBillById = async (billId) => {
   const bill = await prisma.bill.findUnique({
     where: { id: billId },

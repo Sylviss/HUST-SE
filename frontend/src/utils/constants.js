@@ -49,3 +49,9 @@ export const OrderItemStatus = {
   CANCELLED: 'CANCELLED',
   SOLD_OUT: 'SOLD_OUT', // For items kitchen cannot fulfill
 };
+
+export const BillStatus = {
+  UNPAID: 'UNPAID',
+  PAID: 'PAID',
+  VOID: 'VOID',
+};
