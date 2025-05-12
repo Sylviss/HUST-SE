@@ -39,4 +39,11 @@ router.delete(
   menuItemController.deleteMenuItemHandler
 );
 
+router.patch(
+  '/:itemId/availability', // Specific path for this action
+  isAuthenticated,
+  isManager,
+  menuItemController.updateMenuItemAvailabilityHandler // New controller handler
+);
+
 export default router;

@@ -77,3 +77,22 @@ export const deleteMenuItemHandler = async (req, res, next) => {
     next(error);
   }
 };
+
+export const updateMenuItemAvailabilityHandler = async (req, res, next) => {
+  try {
+    const { itemId } = req.params;
+    const { isAvailable } = req.body; // Expecting { "isAvailable": true/false } in body
+
+    if (typeof isAvailable !== 'boolean') {
+      return res.status(400).json({ message: 'isAvailable field must be a boolean.' });
+    }
+
+    const menuItem = await menuItemService.setMenuItemAvailability(itemId, isAvailable);
+    res.status(200).json(menuItem);
+  } catch (error) {
+    if (error.message === 'MenuItem not found') {
+      return res.status(404).json({ message: error.message });
+    }
+    next(error);
+  }
+};

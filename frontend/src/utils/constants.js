@@ -1,0 +1,6 @@
+export const StaffRole = {
+  MANAGER: 'MANAGER',
+  WAITER: 'WAITER',
+  CASHIER: 'CASHIER',
+  KITCHEN_STAFF: 'KITCHEN_STAFF',
+};

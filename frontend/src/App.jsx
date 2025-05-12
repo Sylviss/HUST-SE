@@ -8,6 +8,10 @@ import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { logout } from './store/slices/authSlice';
 import MenuItemsPage from './pages/MenuItemsPage'; // Import
+import { StaffRole } from './utils/constants'; // Create a constants file for roles if you like
+import AddNewMenuItemPage from './pages/admin/AddNewMenuItemPage';
+import EditMenuItemPage from './pages/admin/EditMenuItemPage';
+
 
 function App() {
   const { isAuthenticated, staff } = useSelector((state) => state.auth);
@@ -68,12 +72,11 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/menu" element={<MenuItemsPage />} /> {/* Add Menu Route */}
-            {/* Example for manager-only section of menu management
-            <Route element={<ProtectedRoute allowedRoles={['MANAGER']} />}>
-              <Route path="/admin/menu/new" element={<div>Add New Menu Item Page</div>} />
-              <Route path="/admin/menu/edit/:itemId" element={<div>Edit Menu Item Page</div>} />
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER]} />}> {/* Use imported enum or string 'MANAGER' */}
+              <Route path="/admin/menu/new" element={<AddNewMenuItemPage />} />
+              <Route path="/admin/menu/edit/:itemId" element={<EditMenuItemPage />} />
+              {/* Add other admin routes here */}
             </Route>
-            */}
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

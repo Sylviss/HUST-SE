@@ -55,3 +55,15 @@ export const deleteMenuItem = async (itemId) => {
   });
   // Consider soft delete by adding an `isDeleted` flag instead
 };
+
+export const setMenuItemAvailability = async (itemId, isAvailable) => {
+  const existingItem = await prisma.menuItem.findUnique({ where: { id: itemId } });
+  if (!existingItem) {
+    throw new Error('MenuItem not found');
+  }
+
+  return prisma.menuItem.update({
+    where: { id: itemId },
+    data: { isAvailable },
+  });
+};
