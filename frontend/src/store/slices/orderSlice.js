@@ -4,6 +4,39 @@ import apiClient from '../../services/apiClient';
 import { OrderStatus, OrderItemStatus } from '../../utils/constants'; // Ensure enums are correctly imported
 
 
+
+export const fetchReadyToServeOrders_Dashboard = createAsyncThunk( // Renamed to avoid conflict if used elsewhere
+  'orders/fetchReadyToServeOrders_Dashboard',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get('/orders', {
+        params: { status: OrderStatus.READY }
+      });
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch ready to serve orders';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+
+export const fetchActionRequiredOrders_Dashboard = createAsyncThunk(
+  'orders/fetchActionRequiredOrders_Dashboard',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get('/orders', {
+        params: { status: OrderStatus.ACTION_REQUIRED }
+      });
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch action required orders';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+
 // Thunk to create an order for a session
 export const createOrder = createAsyncThunk(
   'orders/createOrder',
@@ -133,7 +166,14 @@ const initialState = {
   readyToServeError: null,
   isResolving: false, // New state for resolving action
   resolveError: null,
+  actionRequiredOrders_Dashboard: [], // New state for dashboard notifications
+  readyToServeOrders_Dashboard: [],   // New state for dashboard notifications
+  isLoadingActionRequired_Dashboard: false,
+  actionRequiredError_Dashboard: null,
+  isLoadingReady_Dashboard: false,
+  readyError_Dashboard: null,
 };
+
 
 const orderSlice = createSlice({
   name: 'orders',
@@ -166,6 +206,8 @@ const orderSlice = createSlice({
         }
     },
     clearOrderResolveError: (state) => { state.resolveError = null; },
+    clearActionRequiredError_Dashboard: (state) => { state.actionRequiredError_Dashboard = null; },
+    clearReadyError_Dashboard: (state) => { state.readyError_Dashboard = null; },
   },
   extraReducers: (builder) => {
     builder
@@ -264,6 +306,28 @@ const orderSlice = createSlice({
             state.readyToServeOrders.sort((a, b) => new Date(a.orderTime) - new Date(b.orderTime));
           }
         }
+
+        // Update/Remove from readyToServeOrders_Dashboard
+        let rIndexDash = state.readyToServeOrders_Dashboard.findIndex(o => o.id === updatedOrder.id);
+        if (rIndexDash !== -1) {
+            if (updatedOrder.status === OrderStatus.READY) state.readyToServeOrders_Dashboard[rIndexDash] = updatedOrder;
+            else state.readyToServeOrders_Dashboard.splice(rIndexDash, 1); // Remove if no longer READY
+        } else if (updatedOrder.status === OrderStatus.READY) {
+            state.readyToServeOrders_Dashboard.push(updatedOrder);
+        }
+        state.readyToServeOrders_Dashboard.sort((a,b) => new Date(a.orderTime) - new Date(b.orderTime));
+
+
+        // Update/Remove from actionRequiredOrders_Dashboard
+        let arIndexDash = state.actionRequiredOrders_Dashboard.findIndex(o => o.id === updatedOrder.id);
+        if (arIndexDash !== -1) {
+            if (updatedOrder.status === OrderStatus.ACTION_REQUIRED) state.actionRequiredOrders_Dashboard[arIndexDash] = updatedOrder;
+            else state.actionRequiredOrders_Dashboard.splice(arIndexDash, 1); // Remove if no longer ACTION_REQUIRED
+        } else if (updatedOrder.status === OrderStatus.ACTION_REQUIRED) {
+            state.actionRequiredOrders_Dashboard.push(updatedOrder);
+        }
+        state.actionRequiredOrders_Dashboard.sort((a,b) => new Date(a.orderTime) - new Date(b.orderTime));
+
       })
       .addCase(updateOrderStatus.rejected, (state, action) => {
         state.isUpdatingStatus = false; state.statusUpdateError = action.payload;
@@ -352,10 +416,45 @@ const orderSlice = createSlice({
         if (state.currentOrderDetails?.id === updatedOrder.id) {
             state.currentOrderDetails = updatedOrder;
         }
+
+        
+        // Remove from actionRequiredOrders_Dashboard if resolved
+        state.actionRequiredOrders_Dashboard = state.actionRequiredOrders_Dashboard.filter(o => o.id !== updatedOrder.id);
+        // Add to kitchenOrders or readyToServeOrders_Dashboard if it moved to those states
+        if (updatedOrder.status === OrderStatus.PENDING || updatedOrder.status === OrderStatus.PREPARING) {
+            const kIdx = state.kitchenOrders.findIndex(o => o.id === updatedOrder.id);
+            if (kIdx === -1) state.kitchenOrders.push(updatedOrder); else state.kitchenOrders[kIdx] = updatedOrder;
+            state.kitchenOrders.sort((a,b) => new Date(a.orderTime) - new Date(b.orderTime));
+        }
+        if (updatedOrder.status === OrderStatus.READY) {
+            const rIdx = state.readyToServeOrders_Dashboard.findIndex(o => o.id === updatedOrder.id);
+            if (rIdx === -1) state.readyToServeOrders_Dashboard.push(updatedOrder); else state.readyToServeOrders_Dashboard[rIdx] = updatedOrder;
+            state.readyToServeOrders_Dashboard.sort((a,b) => new Date(a.orderTime) - new Date(b.orderTime));
+        }
       })
       .addCase(resolveActionRequiredOrder.rejected, (state, action) => {
         state.isResolving = false;
         state.resolveError = action.payload;
+      })
+      .addCase(fetchReadyToServeOrders_Dashboard.pending, (state) => {
+        state.isLoadingReady_Dashboard = true; state.readyError_Dashboard = null;
+      })
+      .addCase(fetchReadyToServeOrders_Dashboard.fulfilled, (state, action) => {
+        state.isLoadingReady_Dashboard = false; state.readyToServeOrders_Dashboard = action.payload;
+      })
+      .addCase(fetchReadyToServeOrders_Dashboard.rejected, (state, action) => {
+        state.isLoadingReady_Dashboard = false; state.readyError_Dashboard = action.payload; state.readyToServeOrders_Dashboard = [];
+      })
+
+      // Fetch Action Required Orders (for Dashboard)
+      .addCase(fetchActionRequiredOrders_Dashboard.pending, (state) => {
+        state.isLoadingActionRequired_Dashboard = true; state.actionRequiredError_Dashboard = null;
+      })
+      .addCase(fetchActionRequiredOrders_Dashboard.fulfilled, (state, action) => {
+        state.isLoadingActionRequired_Dashboard = false; state.actionRequiredOrders_Dashboard = action.payload;
+      })
+      .addCase(fetchActionRequiredOrders_Dashboard.rejected, (state, action) => {
+        state.isLoadingActionRequired_Dashboard = false; state.actionRequiredError_Dashboard = action.payload; state.actionRequiredOrders_Dashboard = [];
       });
   },
 });
@@ -367,7 +466,9 @@ export const {
   clearOrderStatusUpdateError,
   updateLocalOrderItemStatus,
   clearReadyToServeError,
-  clearOrderResolveError
+  clearOrderResolveError,
+  clearActionRequiredError_Dashboard,
+  clearReadyError_Dashboard
 } = orderSlice.actions;
 
 export default orderSlice.reducer;
