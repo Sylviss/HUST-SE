@@ -7,6 +7,7 @@ import reservationReducer from './slices/reservationSlice'; //
 import diningSessionReducer from './slices/diningSessionSlice'; // Import dining session reducer
 import orderReducer from './slices/orderSlice'; // Import order reducer
 import billReducer from './slices/billSlice'; // Import
+import reportReducer from './slices/reportSlice'; // Import
 
 
 
@@ -19,5 +20,6 @@ export const store = configureStore({
     diningSessions: diningSessionReducer, // Add dining session reducer
     orders: orderReducer, // Add order reducer
     bills: billReducer, // Add bill reducer
+    reports: reportReducer, // Add
   },
 });
