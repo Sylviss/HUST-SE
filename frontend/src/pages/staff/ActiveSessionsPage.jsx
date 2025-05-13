@@ -51,6 +51,7 @@ function ActiveSessionsPage() {
       {!isLoadingList && !listError && diningSessions.length === 0 && (
         <p className="text-gray-600 dark:text-gray-400">No active or billed dining sessions found.</p>
       )}
+      
 
       {!isLoadingList && !listError && diningSessions.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -78,6 +79,15 @@ function ActiveSessionsPage() {
                         Process Bill
                     </button>
                 )}
+                {session.orders?.filter(o => o.status === OrderStatus.ACTION_REQUIRED).map(order => (
+                    <button
+                        key={order.id}
+                        onClick={() => navigate(`/staff/sessions/${session.id}/orders/${order.id}/resolve`, { state: { orderToResolve: order }})}
+                        className="mt-1 text-xs px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded"
+                    >
+                        Resolve Order ...{order.id.slice(-6)}
+                    </button>
+                ))}
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Session ID: ...{session.id.slice(-6)}

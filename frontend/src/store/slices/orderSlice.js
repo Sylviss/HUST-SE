@@ -93,6 +93,29 @@ export const fetchReadyToServeOrders = createAsyncThunk(
   }
 );
 
+export const resolveActionRequiredOrder = createAsyncThunk(
+  'orders/resolveActionRequiredOrder',
+  async ({ orderId, resolutionData }, { dispatch, rejectWithValue }) => {
+    try {
+      // Assuming resolutionData is { itemsToCancelIds?, itemsToUpdate?, itemsToAdd? }
+      const response = await apiClient.put(`/orders/${orderId}/resolve`, resolutionData);
+      // After resolving, the order status should change.
+      // We should get the fully updated order back.
+      // We might need to refetch kitchen orders or active session orders
+      // if the resolved order moves back into PENDING/PREPARING.
+      dispatch(fetchKitchenOrders()); // Re-fetch KDS to update its view
+      if (response.data.diningSessionId) {
+        dispatch(fetchOrdersForSession(response.data.diningSessionId)); // Re-fetch orders for the session
+      }
+      return response.data; // The updated order
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to resolve order';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+
 const initialState = {
   ordersBySession: {},    // Stores orders keyed by sessionId: { sessionId: [order1, order2] }
   kitchenOrders: [],      // Stores orders for the KDS (PENDING, PREPARING)
@@ -108,6 +131,8 @@ const initialState = {
   readyToServeOrders: [],
   isLoadingReadyToServe: false,
   readyToServeError: null,
+  isResolving: false, // New state for resolving action
+  resolveError: null,
 };
 
 const orderSlice = createSlice({
@@ -139,7 +164,8 @@ const orderSlice = createSlice({
                 orderToUpdateInSession.items[itemIndex].status = newStatus;
             }
         }
-    }
+    },
+    clearOrderResolveError: (state) => { state.resolveError = null; },
   },
   extraReducers: (builder) => {
     builder
@@ -293,6 +319,44 @@ const orderSlice = createSlice({
         state.readyToServeError = action.payload;
         state.readyToServeOrders = [];
       })
+      .addCase(resolveActionRequiredOrder.pending, (state) => {
+        state.isResolving = true;
+        state.resolveError = null;
+      })
+      .addCase(resolveActionRequiredOrder.fulfilled, (state, action) => {
+        state.isResolving = false;
+        const updatedOrder = action.payload;
+        // Update the order in all relevant places (kitchenOrders, ordersBySession)
+        // This logic is similar to updateOrderStatus.fulfilled
+        let kIndex = state.kitchenOrders.findIndex(o => o.id === updatedOrder.id);
+        if (kIndex !== -1) {
+          if (updatedOrder.status === OrderStatus.PENDING || updatedOrder.status === OrderStatus.PREPARING) {
+            state.kitchenOrders[kIndex] = updatedOrder; // Update it
+          } else {
+            state.kitchenOrders.splice(kIndex, 1); // Remove if no longer for KDS
+          }
+        } else if (updatedOrder.status === OrderStatus.PENDING || updatedOrder.status === OrderStatus.PREPARING) {
+          state.kitchenOrders.push(updatedOrder); // Add if it moved back to KDS view
+        }
+        state.kitchenOrders.sort((a,b) => new Date(a.orderTime) - new Date(b.orderTime));
+
+
+        if (updatedOrder.diningSessionId && state.ordersBySession[updatedOrder.diningSessionId]) {
+          let sIndex = state.ordersBySession[updatedOrder.diningSessionId].findIndex(o => o.id === updatedOrder.id);
+          if (sIndex !== -1) {
+            state.ordersBySession[updatedOrder.diningSessionId][sIndex] = updatedOrder;
+          } else {
+             state.ordersBySession[updatedOrder.diningSessionId].push(updatedOrder);
+          }
+        }
+        if (state.currentOrderDetails?.id === updatedOrder.id) {
+            state.currentOrderDetails = updatedOrder;
+        }
+      })
+      .addCase(resolveActionRequiredOrder.rejected, (state, action) => {
+        state.isResolving = false;
+        state.resolveError = action.payload;
+      });
   },
 });
 
@@ -302,7 +366,8 @@ export const {
   clearKitchenOrderError,
   clearOrderStatusUpdateError,
   updateLocalOrderItemStatus,
-  clearReadyToServeError
+  clearReadyToServeError,
+  clearOrderResolveError
 } = orderSlice.actions;
 
 export default orderSlice.reducer;

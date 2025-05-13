@@ -142,6 +142,8 @@ function App() {
               <Route path="/staff/seating" element={<TableMapPage />} />
               <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} />
               <Route path="/staff/active-sessions" element={<ActiveSessionsPage />} />
+              <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} />
+              <Route path="/staff/sessions/:sessionId/orders/:orderIdForResolution/resolve" element={<OrderTakingPage />} /> {/* NEW RESOLVE ROUTE */}
             </Route>
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.KITCHEN_STAFF, StaffRole.MANAGER]} />}>
               <Route path="/staff/kitchen" element={<KitchenDisplayPage />} />

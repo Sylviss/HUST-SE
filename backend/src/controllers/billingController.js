@@ -6,14 +6,23 @@ export const generateBillHandler = async (req, res, next) => {
     const { sessionId } = req.params;
     const staffId = req.staff.id;
     const bill = await billingService.generateBillForSession(sessionId, staffId);
-    res.status(200).json(bill); // 200 if updating existing, 201 if creating new might be better
+    res.status(200).json(bill);
   } catch (error) {
     if (error.message.includes('not found') || error.message.includes('No billable orders')) {
+      // "No billable orders" might be a 404 if a bill cannot be generated at all,
+      // or a 400 if it's considered a bad request to try. Let's stick to 404 for "not found" type issues.
       return res.status(404).json({ message: error.message });
     }
-    if (error.message.includes('Cannot generate bill') || error.message.includes('already paid')) {
+    // NEW: Handle the specific error for unfinished orders
+    if (error.message.startsWith('Cannot generate bill. The following orders are not yet SERVED or CANCELLED:')) {
+      return res.status(400).json({ message: error.message }); // Bad Request, as the state is invalid for billing
+    }
+    // Existing checks
+    if (error.message.includes('Cannot generate/regenerate bill for a closed session.') ||
+        error.message.includes('Bill for this session is already paid')) {
       return res.status(400).json({ message: error.message });
     }
+    // Default to next error handler
     next(error);
   }
 };

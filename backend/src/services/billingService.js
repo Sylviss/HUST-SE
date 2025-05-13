@@ -37,20 +37,22 @@ const calculateBillAmounts = (orders) => {
 };
 
 export const generateBillForSession = async (sessionId, staffId) => {
-  // Fetch outside transaction or as first step in tx if other operations need to be atomic with it.
-  // For upsert, the main atomicity is on the bill table itself.
+  // We can use a transaction here if the check and bill generation/update must be atomic,
+  // though the primary atomicity needed was for the bill upsert itself.
+  // For this check, fetching first then proceeding is usually okay.
+  // If high concurrency is a concern, a transaction for the check + upsert would be safer.
+
   const diningSession = await prisma.diningSession.findUnique({
     where: { id: sessionId },
     include: {
-      orders: { // Ensure you fetch orders and items needed for calculateBillAmounts
-        where: { status: { not: OrderStatus.CANCELLED } }, // Example filter
+      orders: { // Fetch all orders to check their statuses
         include: {
-            items: {
-                where: { status: { notIn: [OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT] } }
-            }
+          items: { // Needed for calculateBillAmounts
+            where: { status: { notIn: [OrderItemStatus.CANCELLED, OrderItemStatus.SOLD_OUT] } }
+          }
         }
       },
-      // No need to include 'bill' here if upsert is based on diningSessionId
+      bill: true
     },
   });
 
@@ -59,15 +61,32 @@ export const generateBillForSession = async (sessionId, staffId) => {
     throw new Error('Cannot generate/regenerate bill for a closed session.');
   }
 
-  // Check if a PAID bill already exists for this session *before* attempting upsert.
-  const existingPaidBill = await prisma.bill.findFirst({
-      where: { diningSessionId: sessionId, status: BillStatus.PAID }
-  });
-  if (existingPaidBill) {
+  // --- NEW VALIDATION LOGIC ---
+  if (diningSession.orders && diningSession.orders.length > 0) {
+    const unfinishedOrders = diningSession.orders.filter(order =>
+      order.status !== OrderStatus.SERVED &&
+      order.status !== OrderStatus.CANCELLED
+    );
+
+    if (unfinishedOrders.length > 0) {
+      const unfinishedOrderIds = unfinishedOrders.map(o => `...${o.id.slice(-6)} (Status: ${o.status})`).join(', ');
+      throw new Error(
+        `Cannot generate bill. The following orders are not yet SERVED or CANCELLED: ${unfinishedOrderIds}. Please ensure all orders are finalized.`
+      );
+    }
+  }
+  // If there are no orders at all, calculateBillAmounts will result in $0.
+  // You might want a policy here: allow $0 bill, or throw error "No orders to bill".
+  // For now, let's assume a $0 bill is possible if all orders were cancelled or session had no orders.
+  // The previous warning in generateBillForSession for no billable orders can stay.
+
+
+  // If a PAID bill exists, we might not want to allow regeneration/update.
+  if (diningSession.bill && diningSession.bill.status === BillStatus.PAID) {
       throw new Error('Bill for this session is already paid and cannot be regenerated.');
   }
 
-  const amounts = calculateBillAmounts(diningSession.orders);
+  const amounts = calculateBillAmounts(diningSession.orders); // This uses the orders fetched above
 
   const bill = await prisma.bill.upsert({
     where: {
@@ -121,6 +140,8 @@ export const generateBillForSession = async (sessionId, staffId) => {
       }
   });
 };
+
+
 export const getBillById = async (billId) => {
   const bill = await prisma.bill.findUnique({
     where: { id: billId },
