@@ -1,6 +1,6 @@
 // ./frontend/src/App.jsx
 import React from 'react';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom'; // Add Navigate
 import { useSelector, useDispatch } from 'react-redux';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -21,6 +21,7 @@ import ActiveSessionsPage from './pages/staff/ActiveSessionsPage'; // Import
 import KitchenDisplayPage from './pages/staff/KitchenDisplayPage'; // Import
 import ServingQueuePage from './pages/staff/ServingQueuePage'; // 
 import BillingPage from './pages/staff/BillingPage'; // Import
+import CustomerReservationPage from './pages/customer/CustomerReservationPage'; // Import
 
 
 
@@ -45,6 +46,7 @@ function App() {
   const isKitchenOrManager = staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.MANAGER;
   const canServeOrders = staff?.role === StaffRole.WAITER || staff?.role === StaffRole.MANAGER;
   const canProcessBills = staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.WAITER;
+  const staffDashboardPath = "/staff/dashboard"; // Let's make a dedicated staff landing
 
   return (
     // Use Tailwind classes for a full-height flex column layout
@@ -53,11 +55,9 @@ function App() {
         <div className="container mx-auto px-6 py-3 flex justify-between items-center">
           {/* Left side of the navbar for navigation links */}
           <div className="flex items-center">
-            {isAuthenticated && (
-              <Link to="/" className="text-xl font-semibold text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6">
-                Dashboard
-              </Link>
-            )}
+            <Link to="/" className="text-xl font-semibold text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6">
+              Ratatoulie {/* Or your actual restaurant name/logo */}
+            </Link>
             {isAuthenticated && (
               <Link to="/menu" className="text-gray-700 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 mr-6"> {/* Added mr-6 for spacing */}
                 Menu
@@ -125,9 +125,11 @@ function App() {
       {/* Content area that grows to fill available space */}
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
         <Routes>
+          <Route path="/" element={isAuthenticated && staff ? <Navigate to={staffDashboardPath} replace /> : <CustomerReservationPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<DashboardPage />} />
+            <Route path={staffDashboardPath} element={<DashboardPage />} /> Staff Dashboard
+            {/* <Route path="/" element={<DashboardPage />} /> */}
             <Route path="/menu" element={<MenuItemsPage />} /> {/* Add Menu Route */}
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER]} />}> {/* Use imported enum or string 'MANAGER' */}
               <Route path="/admin/menu/new" element={<AddNewMenuItemPage />} />

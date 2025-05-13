@@ -17,6 +17,22 @@ export const fetchReservations = createAsyncThunk(
   }
 );
 
+export const submitCustomerReservation = createAsyncThunk(
+  'reservations/submitCustomerReservation',
+  async (reservationPayload, { rejectWithValue }) => {
+    // reservationPayload includes: name, contactPhone, contactEmail, reservationTime, partySize, notes
+    try {
+      // The backend POST /api/v1/reservations endpoint is public and handles customer creation/linking
+      const response = await apiClient.post('/reservations', reservationPayload);
+      return response.data; // The newly created reservation (status: PENDING)
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to submit reservation request';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+
 export const markAsNoShow = createAsyncThunk(
   'reservations/markAsNoShow',
   async (reservationId, { rejectWithValue }) => {
@@ -126,6 +142,21 @@ const reservationSlice = createSlice({
       })
       .addCase(markAsNoShow.rejected, (state, action) => {
         state.isProcessingAction = false; state.actionError = action.payload;
+      })
+      .addCase(submitCustomerReservation.pending, (state) => {
+        state.isProcessingAction = true; // Reuse for general action processing
+        state.actionError = null;
+      })
+      .addCase(submitCustomerReservation.fulfilled, (state, action) => {
+        state.isProcessingAction = false;
+        // We don't typically add this to the staff's 'items' list directly,
+        // as they fetch reservations based on filters.
+        // The success is handled by the component.
+        console.log('Customer reservation submitted:', action.payload);
+      })
+      .addCase(submitCustomerReservation.rejected, (state, action) => {
+        state.isProcessingAction = false;
+        state.actionError = action.payload; // This will be picked up by the form
       });
   },
 });
