@@ -22,7 +22,7 @@ function KitchenDisplayPage() {
   } = useSelector((state) => state.orders);
 
   // Auto-refresh interval (e.g., every 30 seconds)
-  const REFRESH_INTERVAL = 30000; // 30 seconds
+  const REFRESH_INTERVAL = 5000; // 30 seconds
 
   useEffect(() => {
     dispatch(fetchKitchenOrders()); // Initial fetch

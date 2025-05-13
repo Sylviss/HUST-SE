@@ -33,8 +33,7 @@ function ReservationsManagementPage() {
     actionError
   } = useSelector((state) => state.reservations);
   const { items: tables } = useSelector((state) => state.tables); // Get tables for assignment
-
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [filterDate, setFilterDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [filterStatus, setFilterStatus] = useState(ReservationStatusEnum.PENDING);
   const [selectedTableForConfirm, setSelectedTableForConfirm] = useState('');
 

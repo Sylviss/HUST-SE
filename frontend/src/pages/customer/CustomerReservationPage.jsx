@@ -30,13 +30,12 @@ function CustomerReservationPage() {
     isProcessingAction: isSubmitting, // from reservationSlice (confirm/cancel, could be a general submitting flag)
     actionError: submitError         // from reservationSlice
   } = useSelector((state) => state.reservations);
-
+  console.log(new Date().toLocaleString('en-CA'))
   const [submissionStatus, setSubmissionStatus] = useState(''); // 'success', 'error', ''
-
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(reservationSchema),
     defaultValues: {
-        reservationDate: new Date().toISOString().split('T')[0], // Default to today
+        reservationDate: new Date().toLocaleDateString('en-CA'), // Default to today
         reservationTime: "19:00", // Default to 7 PM
         partySize: 2,
     }
@@ -56,7 +55,7 @@ function CustomerReservationPage() {
     const { reservationDate, reservationTime, ...restOfData } = data;
     // Combine date and time into a full ISO string or a format your backend expects
     // Assuming backend can parse "YYYY-MM-DDTHH:mm"
-    const fullReservationTime = `${reservationDate}T${reservationTime}:00.000Z`; // Construct ISO string; consider timezone carefully
+    const fullReservationTime = `${reservationDate}T${reservationTime}:00.000`; // Construct ISO string; consider timezone carefully
                                                                             // Or send date and time separately if backend handles that
 
     const reservationPayload = {
@@ -117,7 +116,7 @@ function CustomerReservationPage() {
                 <div>
                     <label htmlFor="reservationDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date</label>
                     <input id="reservationDate" type="date" {...register("reservationDate")} required
-                           min={new Date().toISOString().split('T')[0]} // Prevent past dates
+                           min={new Date().toLocaleDateString('en-CA')} // Prevent past dates
                            className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"/>
                     {errors.reservationDate && <p className="mt-1 text-xs text-red-500">{errors.reservationDate.message}</p>}
                 </div>

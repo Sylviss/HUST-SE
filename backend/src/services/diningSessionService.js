@@ -121,11 +121,22 @@ export const getDiningSessionById = async (sessionId) => {
   const session = await prisma.diningSession.findUnique({
     where: { id: sessionId },
     include: {
-      table: true,
-      reservation: { include: { customer: true } },
+      table: { select: { id: true, tableNumber: true, capacity: true } },
+      reservation: { include: { customer: { select: { id: true, name: true, contactPhone: true } } } },
       openedBy: { select: { id: true, name: true, role: true } },
-      // orders: { include: { items: { include: { menuItem: true } } } }, // For later
-      // bill: true // For later
+      orders: { // <<< Crucial: Include orders and their items
+        include: {
+          items: {
+            include: {
+              menuItem: { select: { id: true, name: true, price: true } }
+            },
+            orderBy: { createdAt: 'asc' }
+          },
+          takenBy: { select: { id: true, name: true }}
+        },
+        orderBy: { orderTime: 'asc' }
+      },
+      bill: true // <<< Crucial: Include the bill
     },
   });
   if (!session) throw new Error('Dining session not found');

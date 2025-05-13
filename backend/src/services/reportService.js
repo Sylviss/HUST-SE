@@ -29,8 +29,8 @@ export const getRevenueReport = async (startDate, endDate) => {
   });
 
   return {
-    startDate: sDate.toISOString().split('T')[0],
-    endDate: eDate.toISOString().split('T')[0],
+    startDate: sDate.toLocaleDateString('en-CA'),
+    endDate: eDate.toLocaleDateString('en-CA'),
     totalRevenue: result._sum.totalAmount || 0,
     numberOfPaidBills: result._count.id || 0,
     averageBillValue: (result._count.id && result._sum.totalAmount) ? (result._sum.totalAmount / result._count.id) : 0,

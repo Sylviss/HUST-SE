@@ -8,6 +8,7 @@ import diningSessionReducer from './slices/diningSessionSlice'; // Import dining
 import orderReducer from './slices/orderSlice'; // Import order reducer
 import billReducer from './slices/billSlice'; // Import
 import reportReducer from './slices/reportSlice'; // Import
+import staffReducer from './slices/staffSlice'; // Import
 
 
 
@@ -21,5 +22,6 @@ export const store = configureStore({
     orders: orderReducer, // Add order reducer
     bills: billReducer, // Add bill reducer
     reports: reportReducer, // Add
+    staff: staffReducer, // Add
   },
 });

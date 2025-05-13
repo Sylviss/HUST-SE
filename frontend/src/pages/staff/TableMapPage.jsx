@@ -51,7 +51,7 @@ function TableMapPage() {
   const [partyIdentifier, setPartyIdentifier] = useState('');
   const [selectedReservationId, setSelectedReservationId] = useState('');
 
-  const todayISO = new Date().toISOString().split('T')[0];
+  const todayISO = new Date().toLocaleDateString('en-CA');
 
   useEffect(() => {
     dispatch(fetchTables());

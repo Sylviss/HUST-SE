@@ -9,6 +9,7 @@ import orderRoutes from './orderRoutes.js'; // For general access like /orders/:
 import orderItemRoutes from './orderItemRoutes.js'; // For /order-items/:orderItemId
 import { billRoutes } from './billingRoutes.js'; // Import direct bill routes
 import reportRoutes from './reportRoutes.js';
+import staffRoutes from './staffRoutes.js'; // <<< IMPORT
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.use('/orders', orderRoutes); // For direct access to an order by its ID, 
 router.use('/order-items', orderItemRoutes); // For direct access to an order item by its 
 router.use('/bills', billRoutes); // Add direct bill routes
 router.use('/reports', reportRoutes);
+router.use('/staff', staffRoutes); // <<< MOUNT
 
 
 

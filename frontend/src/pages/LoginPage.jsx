@@ -14,7 +14,7 @@ function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/'); // Redirect to dashboard if already logged in
+      navigate('/staff/dashboard'); // Redirect to dashboard if already logged in
     }
     // Clear any previous login errors when component mounts
     dispatch(clearAuthError());

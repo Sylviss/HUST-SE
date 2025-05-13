@@ -20,7 +20,7 @@ function ServingQueuePage() {
     statusUpdateError
   } = useSelector((state) => state.orders);
 
-  const REFRESH_INTERVAL = 20000; // Refresh every 20 seconds
+  const REFRESH_INTERVAL = 5000; // Refresh every 20 seconds
 
   useEffect(() => {
     dispatch(fetchReadyToServeOrders());

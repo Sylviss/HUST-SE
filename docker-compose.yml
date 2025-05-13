@@ -14,6 +14,7 @@ services:
       - VITE_API_URL=http://localhost:5000/api/v1
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+      - TZ=Asia/Ho_Chi_Minh
     command: npm run dev -- --host --port 3000
     depends_on:
       - backend
@@ -42,6 +43,7 @@ services:
       - NODE_ENV=development
       - JWT_SECRET=YOUR_VERY_STRONG_AND_SECRET_JWT_KEY # Make sure this is set
       - JWT_EXPIRES_IN=1h
+      - TZ=Asia/Ho_Chi_Minh
     command: npm run dev
     depends_on:
       db:

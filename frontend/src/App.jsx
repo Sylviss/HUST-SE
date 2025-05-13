@@ -23,6 +23,11 @@ import ServingQueuePage from './pages/staff/ServingQueuePage';
 import BillingPage from './pages/staff/BillingPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ReportsPage from './pages/admin/ReportsPage'; // Import
+import StaffManagementPage from './pages/admin/StaffManagementPage';
+import AddStaffPage from './pages/admin/AddStaffPage';
+import EditStaffPage from './pages/admin/EditStaffPage';
+import DiningSessionsListPage from './pages/staff/DiningSessionsListPage';
+import DiningSessionDetailPage from './pages/staff/DiningSessionDetailPage';
 
 
 // Components & Utils
@@ -50,7 +55,8 @@ function App() {
   const showKitchenLink = isAuthenticated && (staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.MANAGER);
   const showServingQueueLink = isAuthenticated && (staff?.role === StaffRole.WAITER || staff?.role === StaffRole.MANAGER);
   const showStaffMenuLink = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER)
-
+  const canViewAllSessions = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.WAITER);
+  
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -85,6 +91,12 @@ function App() {
               {showManagerAdminLinks && <Link to="/admin/tables" className="text-gray-700 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400">Table Admin</Link>}
               {showManagerAdminLinks && (
                 <Link to="/admin/reports" className="text-gray-700 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400">Reports</Link>
+              )}
+              {showManagerAdminLinks && (
+                <Link to="/admin/staff" className="text-gray-700 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400">Staff Mgt</Link>
+              )}
+              {canViewAllSessions && (
+                <Link to="/staff/sessions" className="text-gray-700 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400">All Sessions</Link>
               )}
               {/* Add more staff links here */}
             </div>
@@ -135,6 +147,8 @@ function App() {
               <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} />
               <Route path="/staff/sessions/:sessionId/orders/:orderIdForResolution/resolve" element={<OrderTakingPage />} />
               <Route path="/staff/sessions/:sessionId/bill" element={<BillingPage />} />
+              <Route path="/staff/sessions" element={<DiningSessionsListPage />} /> {/* List all sessions */}
+              <Route path="/staff/sessions/:sessionId/details" element={<DiningSessionDetailPage />} /> {/* View specific session */}
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.KITCHEN_STAFF, StaffRole.MANAGER]} />}>
@@ -154,6 +168,9 @@ function App() {
               <Route path="/admin/tables/new" element={<AddNewTablePage />} />
               <Route path="/admin/tables/edit/:tableId" element={<EditTablePage />} />
               <Route path="/admin/reports" element={<ReportsPage />} />
+              <Route path="/admin/staff" element={<StaffManagementPage />} />
+              <Route path="/admin/staff/new" element={<AddStaffPage />} />
+              <Route path="/admin/staff/edit/:staffId" element={<EditStaffPage />} />
               {/* Add /admin/staff-management and /admin/reports routes here */}
             </Route>
           </Route>

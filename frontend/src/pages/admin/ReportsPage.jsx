@@ -12,7 +12,7 @@ function ReportsPage() {
   const dispatch = useDispatch();
   const { revenueReport, popularItemsReport, isLoading, error } = useSelector((state) => state.reports);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [popularItemLimit, setPopularItemLimit] = useState(5);
