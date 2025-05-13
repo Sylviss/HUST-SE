@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchMenuItems, clearMenuItemError } from '../../store/slices/menuItemSlice';
-import { createOrder, clearOrderSubmitError, fetchOrdersForSession, clearOrderListError } from '../../store/slices/orderSlice';
+import { createOrder, clearOrderSubmitError, fetchOrdersForSession, clearOrderListError, updateOrderStatus, clearOrderStatusUpdateError } from '../../store/slices/orderSlice';
 import { fetchDiningSessionById, clearSessionCurrentError, clearCurrentSession } from '../../store/slices/diningSessionSlice';
+import { OrderStatus, StaffRole } from '../../utils/constants';
 
 function OrderTakingPage() {
   const { sessionId } = useParams();
@@ -18,8 +19,13 @@ function OrderTakingPage() {
     isLoadingCurrent: sessionDetailsLoading,
     currentError: sessionDetailsError
   } = useSelector(state => state.diningSessions);
-  const { ordersBySession, isSubmitting: orderSubmitting, submitError: orderSubmitError } = useSelector((state) => state.orders);
-
+  const {
+    ordersBySession,
+    isSubmitting: orderSubmitting,
+    submitError: orderSubmitError,
+    isUpdatingStatus: statusUpdating, // From orderSlice
+    statusUpdateError
+  } = useSelector((state) => state.orders);
   const [draftOrderItems, setDraftOrderItems] = useState([]); // { menuItemId, name, price, quantity, specialRequests }
   const [overallOrderNotes, setOverallOrderNotes] = useState('');
 
@@ -37,6 +43,7 @@ function OrderTakingPage() {
         dispatch(clearOrderListError());
         dispatch(clearSessionCurrentError());
         dispatch(clearCurrentSession());
+        dispatch(clearOrderStatusUpdateError()); // Clear status update error on unmount
     }
   }, [dispatch, sessionId]);
 
@@ -75,6 +82,26 @@ function OrderTakingPage() {
         return item;
       })
     );
+  };
+
+  const handleCancelEntireOrder = async (orderIdToCancel) => {
+    const order = sessionOrders.find(o => o.id === orderIdToCancel);
+    if (!order) return;
+
+    // Frontend check matches the new backend rule
+    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.ACTION_REQUIRED) {
+        alert(`This order is already ${order.status} and cannot be cancelled directly here.`);
+        return;
+    }
+
+    if (window.confirm(`Are you sure you want to cancel the entire Order ...${orderIdToCancel.slice(-6)}? This will cancel all its items.`)) {
+      const resultAction = await dispatch(updateOrderStatus({ orderId: orderIdToCancel, status: OrderStatus.CANCELLED }));
+      if (updateOrderStatus.fulfilled.match(resultAction)) {
+        alert('Order cancelled successfully.');
+        dispatch(fetchOrdersForSession(sessionId)); // Refetch to update list
+      }
+      // Errors are handled by statusUpdateError and displayed
+    }
   };
 
   const handleRemoveDraftItem = (menuItemId) => {
@@ -224,15 +251,43 @@ function OrderTakingPage() {
         </div>
         
         <div className="mt-6">
-            <h4 className="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Existing Orders for this Session:</h4>
-            {sessionOrders.length === 0 && <p className="text-xs text-gray-500 dark:text-gray-400">No orders submitted yet for this session.</p>}
-            <ul className="text-xs space-y-1 max-h-32 overflow-y-auto pr-2"> {/* Added pr-2 for scrollbar */}
-                {sessionOrders.map(order => (
-                    <li key={order.id} className="p-1 bg-gray-100 dark:bg-gray-600 rounded text-gray-700 dark:text-gray-300">
-                        Order ID: ...{order.id.slice(-6)} - Status: {order.status} ({order.items?.length || 0} items)
-                    </li>
-                ))}
-            </ul>
+          <h4 className="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Existing Orders for this Session:</h4>
+          {statusUpdateError && <p className="text-xs text-red-500 mb-2">Error updating order: {statusUpdateError}</p>}
+          {sessionOrders.length === 0 && <p className="text-xs text-gray-500 dark:text-gray-400">No orders submitted yet.</p>}
+          <ul className="text-xs space-y-2 max-h-40 overflow-y-auto pr-2">
+            {sessionOrders.map(order => (
+              <li key={order.id} className="p-2 bg-gray-100 dark:bg-gray-600 rounded text-gray-700 dark:text-gray-300">
+                <div className="flex justify-between items-center">
+                  <span>Order ID: ...{order.id.slice(-6)}</span>
+                  <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full ${
+                      order.status === OrderStatus.PENDING ? 'bg-yellow-200 text-yellow-800' :
+                      order.status === OrderStatus.PREPARING ? 'bg-blue-200 text-blue-800' :
+                      order.status === OrderStatus.READY ? 'bg-teal-200 text-teal-800' :
+                      order.status === OrderStatus.SERVED ? 'bg-green-200 text-green-800' :
+                      order.status === OrderStatus.CANCELLED ? 'bg-red-200 text-red-800' :
+                      order.status === OrderStatus.ACTION_REQUIRED ? 'bg-orange-200 text-orange-800' :
+                      'bg-gray-200 text-gray-800'
+                  }`}>
+                      {order.status}
+                  </span>
+                </div>
+                <div className="text-xxs text-gray-500 dark:text-gray-400">
+                  {order.items?.length || 0} items - Total: ${order.items?.reduce((sum, i) => sum + (i.priceAtOrderTime * i.quantity), 0).toFixed(2) || '0.00'}
+                </div>
+                {/* Show Cancel button only if order is in a cancellable state */}
+                {(order.status === OrderStatus.PENDING || order.status === OrderStatus.ACTION_REQUIRED) &&
+                  (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER) && (
+                  <button
+                    onClick={() => handleCancelEntireOrder(order.id)}
+                    disabled={statusUpdating}
+                    className="mt-1 text-xxs px-2 py-0.5 bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50"
+                  >
+                    {statusUpdating ? 'Cancelling...' : 'Cancel Order'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>

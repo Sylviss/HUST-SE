@@ -165,7 +165,6 @@ export const getAllOrders = async (filters = {}) => {
     return prisma.order.findMany({ where: whereClause, include: FULL_ORDER_INCLUDES, orderBy: { orderTime: 'asc' } });
 };
 
-// --- updateOrderStatus (Handles Top-Down Cascade) ---
 export const updateOrderStatus = async (orderId, newStatus, staffId) => {
   if (!Object.values(OrderStatus).includes(newStatus)) {
     throw new Error(`Invalid order status: ${newStatus}`);
@@ -174,14 +173,28 @@ export const updateOrderStatus = async (orderId, newStatus, staffId) => {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      include: { items: { select: {id: true, status: true }} } // Select only what's needed for cascade logic
+      include: { items: true }
     });
     if (!order) throw new Error('Order not found.');
 
-    const allowedTransitions = validOrderStatusTransitions[order.status] || [];
-    if (!allowedTransitions.includes(newStatus) && order.status !== newStatus) {
-        throw new Error(`Invalid status transition for order from ${order.status} to ${newStatus}.`);
+    // --- MODIFIED CANCELLATION LOGIC ---
+    if (newStatus === OrderStatus.CANCELLED) {
+      if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.ACTION_REQUIRED) {
+        throw new Error(
+          `Order cannot be cancelled. Only PENDING or ACTION_REQUIRED orders can be cancelled. Current status: ${order.status}`
+        );
+      }
+      // If already CANCELLED, no change needed (or throw error)
+      if (order.status === OrderStatus.CANCELLED) {
+          throw new Error(`Order is already cancelled.`);
+      }
+    } else { // For other status transitions (PREPARING, READY, SERVED)
+      const allowedTransitions = validOrderStatusTransitions[order.status] || [];
+      if (!allowedTransitions.includes(newStatus) && order.status !== newStatus) {
+          throw new Error(`Invalid status transition for order from ${order.status} to ${newStatus}.`);
+      }
     }
+    // --- END MODIFIED CANCELLATION LOGIC ---
 
     let itemStatusToSet = null;
     let applicableItemCurrentStatuses = [];
@@ -197,10 +210,13 @@ export const updateOrderStatus = async (orderId, newStatus, staffId) => {
         applicableItemCurrentStatuses = [OrderItemStatus.PENDING, OrderItemStatus.PREPARING, OrderItemStatus.READY];
     } else if (newStatus === OrderStatus.CANCELLED) {
         itemStatusToSet = OrderItemStatus.CANCELLED;
+        // If order is cancelled, cancel all items regardless of their current individual status
+        // (unless already SERVED, but our top check prevents cancelling SERVED orders now)
         applicableItemCurrentStatuses = Object.values(OrderItemStatus).filter(s => s !== OrderItemStatus.SERVED);
     }
 
-    if (itemStatusToSet) {
+
+    if (itemStatusToSet && order.items && order.items.length > 0) {
       const itemIdsToUpdate = order.items
         .filter(item => applicableItemCurrentStatuses.includes(item.status))
         .map(item => item.id);
@@ -219,10 +235,12 @@ export const updateOrderStatus = async (orderId, newStatus, staffId) => {
       data: { status: newStatus }
     });
 
-    // Re-sync to ensure final consistency and get full includes for response
+    // Sync and return the fully populated order
+    // If newStatus is CANCELLED, syncOrderStatusBasedOnItems should confirm this.
     return syncOrderStatusBasedOnItems(orderId, tx);
   });
 };
+
 
 // --- updateOrderItemStatus (Handles Item-Specific Changes & SOLD_OUT Propagation) ---
 export const updateOrderItemStatus = async (orderItemId, newStatus, reason = null, staffId) => {
