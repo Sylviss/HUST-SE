@@ -64,3 +64,16 @@ export const cancelReservationHandler = async (req, res, next) => {
     next(error);
   }
 };
+
+export const markAsNoShowHandler = async (req, res, next) => {
+  try {
+      const staffId = req.staff.id; // From isAuthenticated middleware
+      const reservation = await reservationService.markReservationAsNoShow(req.params.reservationId, staffId);
+      res.status(200).json(reservation);
+  } catch (error) {
+      if (error.message.includes('not found') || error.message.includes('status')) {
+          return res.status(error.message.includes('not found') ? 404 : 400).json({ message: error.message });
+      }
+      next(error);
+  }
+};

@@ -6,7 +6,8 @@ import {
   confirmReservation,
   cancelReservation,
   clearReservationError,
-  clearReservationActionError
+  clearReservationActionError,
+  markAsNoShow
 } from '../../store/slices/reservationSlice';
 import { fetchTables } from '../../store/slices/tableSlice'; // To select a table for confirmation
 import { StaffRole, ReservationStatusEnum, TableStatusEnum } from '../../utils/constants'; // Define ReservationStatusEnum
@@ -66,7 +67,13 @@ function ReservationsManagementPage() {
   };
 
   const availableTablesForAssignment = tables.filter(t => t.status === TableStatusEnum.AVAILABLE || t.status === TableStatusEnum.RESERVED);
-
+  const handleMarkNoShow = (reservationId) => {
+    if (window.confirm('Are you sure you want to mark this reservation as No-Show?')) {
+      dispatch(markAsNoShow(reservationId)).then(() => {
+        dispatch(fetchReservations({ date: filterDate, status: filterStatus })); // Refetch
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -105,7 +112,7 @@ function ReservationsManagementPage() {
             onChange={(e) => setSelectedTableForConfirm(e.target.value)}
             className="mt-1 block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-600 dark:text-white"
           >
-            <option value="">Auto-assign or Keep Unassigned</option>
+            <option value="">Auto-assign</option>
             {availableTablesForAssignment.map(table => (
                 <option key={table.id} value={table.id}>
                     {table.tableNumber} (Cap: {table.capacity})
@@ -174,6 +181,15 @@ function ReservationsManagementPage() {
                         disabled={isProcessingAction}
                       >
                         Cancel
+                      </button>
+                    )}
+                    {(res.status === ReservationStatusEnum.PENDING || res.status === ReservationStatusEnum.CONFIRMED) && (
+                      <button
+                        onClick={() => handleMarkNoShow(res.id)}
+                        className="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300"
+                        disabled={isProcessingAction}
+                      >
+                        No-Show
                       </button>
                     )}
                     {/* Add "Seat" button later, which will navigate to/trigger startDiningSession */}

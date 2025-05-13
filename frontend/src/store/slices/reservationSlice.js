@@ -17,6 +17,19 @@ export const fetchReservations = createAsyncThunk(
   }
 );
 
+export const markAsNoShow = createAsyncThunk(
+  'reservations/markAsNoShow',
+  async (reservationId, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.patch(`/reservations/${reservationId}/no-show`);
+      return response.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to mark as no-show';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 // Thunk to confirm a reservation
 export const confirmReservation = createAsyncThunk(
   'reservations/confirmReservation',
@@ -101,6 +114,17 @@ const reservationSlice = createSlice({
         // Or filter out if you prefer: state.items = state.items.filter(res => res.id !== action.payload.id);
       })
       .addCase(cancelReservation.rejected, (state, action) => {
+        state.isProcessingAction = false; state.actionError = action.payload;
+      })
+      .addCase(markAsNoShow.pending, (state) => {
+        state.isProcessingAction = true; state.actionError = null;
+      })
+      .addCase(markAsNoShow.fulfilled, (state, action) => {
+        state.isProcessingAction = false;
+        const index = state.items.findIndex(res => res.id === action.payload.id);
+        if (index !== -1) state.items[index] = action.payload;
+      })
+      .addCase(markAsNoShow.rejected, (state, action) => {
         state.isProcessingAction = false; state.actionError = action.payload;
       });
   },

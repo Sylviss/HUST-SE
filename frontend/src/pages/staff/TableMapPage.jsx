@@ -1,17 +1,16 @@
 // ./frontend/src/pages/staff/TableMapPage.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react'; // Added useMemo
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchTables, clearTableError } from '../../store/slices/tableSlice';
-import { fetchReservations, clearReservationError } from '../../store/slices/reservationSlice'; // To select a reservation
+import { fetchReservations, clearReservationError } from '../../store/slices/reservationSlice';
 import {
   startDiningSession,
-  clearSessionSubmitError, // CHANGE THIS
+  clearSessionSubmitError, // Corrected this import based on your previous fix
 } from '../../store/slices/diningSessionSlice';
 import { StaffRole, TableStatusEnum, ReservationStatusEnum } from '../../utils/constants';
-// Modal component will be created or use a library
 
-// Simple Modal Placeholder (you'd use a proper modal component library or build one)
+// Simple Modal Placeholder (as you provided)
 const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
@@ -36,7 +35,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-
 function TableMapPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -45,48 +43,80 @@ function TableMapPage() {
   const { items: reservations, isLoading: reservationsLoading, error: reservationsError } = useSelector(
     (state) => state.reservations
   );
-  // diningSessionSlice state will be needed for isSubmitting and submitError
   const { isSubmitting: isSessionSubmitting, submitError: sessionSubmitError } = useSelector(state => state.diningSessions || {});
-
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
-  const [partySize, setPartySize] = useState(2); // Default party size for walk-in
-  const [partyIdentifier, setPartyIdentifier] = useState(''); // For walk-in name/notes
+  const [partySize, setPartySize] = useState(2);
+  const [partyIdentifier, setPartyIdentifier] = useState('');
   const [selectedReservationId, setSelectedReservationId] = useState('');
+
+  const todayISO = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     dispatch(fetchTables());
-    dispatch(fetchReservations({ status: ReservationStatusEnum.CONFIRMED, date: new Date().toISOString().split('T')[0] }));
+    dispatch(fetchReservations({ status: ReservationStatusEnum.CONFIRMED, date: todayISO }));
     
     return () => {
         dispatch(clearTableError());
         dispatch(clearReservationError());
-        dispatch(clearSessionSubmitError()); // USE THE CORRECT ACTION
+        dispatch(clearSessionSubmitError());
     }
-  }, [dispatch]);
+  }, [dispatch, todayISO]); // todayISO won't change in component lifecycle, but good to have if date filter was dynamic
 
   const handleTableSelect = (table) => {
-    if (table.status === TableStatusEnum.AVAILABLE || table.status === TableStatusEnum.RESERVED) {
-      setSelectedTable(table);
-      setPartySize(table.capacity); // Default to table capacity or a sensible default
-      setIsModalOpen(true);
-    } else {
-      alert(`Table ${table.tableNumber} is currently ${table.status}.`);
+    // Allow selection only if table is not already fully occupied or out of service
+    if (table.status === TableStatusEnum.OCCUPIED || table.status === TableStatusEnum.OUT_OF_SERVICE) {
+      alert(`Table ${table.tableNumber} is currently ${table.status}. Cannot start a new session.`);
+      return;
     }
+
+    setSelectedTable(table);
+    setPartyIdentifier(''); // Reset for walk-in by default
+
+    // Logic to pre-select reservation if table is RESERVED
+    if (table.status === TableStatusEnum.RESERVED) {
+      const matchingReservation = reservations.find(
+        (res) => res.tableId === table.id && res.status === ReservationStatusEnum.CONFIRMED
+      );
+      if (matchingReservation) {
+        setSelectedReservationId(matchingReservation.id);
+        setPartySize(matchingReservation.partySize);
+      } else {
+        // Table is RESERVED but no matching CONFIRMED reservation found for it (data inconsistency or old reservation)
+        // Or it's reserved for a reservation not yet loaded (e.g. different date filter initially)
+        // For now, allow staff to override, backend will validate.
+        // Could display a warning here.
+        setSelectedReservationId('');
+        setPartySize(table.capacity); // Default to table capacity
+        alert(`Table ${table.tableNumber} is marked RESERVED, but no matching active confirmed reservation found. Proceed with caution or verify reservation details.`);
+      }
+    } else { // Table is AVAILABLE or NEEDS_CLEANING (still seatable)
+      setSelectedReservationId(''); // Clear any previously selected reservation
+      setPartySize(Math.min(2, table.capacity)); // Default party size for available table
+    }
+    setIsModalOpen(true);
   };
 
   const handleStartSession = async () => {
     if (!selectedTable) return;
+    if (!partySize || partySize <= 0) {
+        alert("Party size must be greater than 0.");
+        return;
+    }
+    if (partySize > selectedTable.capacity) {
+        alert(`Party size (${partySize}) exceeds table capacity (${selectedTable.capacity}).`);
+        return;
+    }
 
     const sessionData = {
       tableId: selectedTable.id,
       partySize: parseInt(partySize, 10),
-      partyIdentifier: selectedReservationId ? undefined : partyIdentifier, // Only for walk-ins
+      partyIdentifier: selectedReservationId ? undefined : (partyIdentifier.trim() || `Walk-in Party of ${partySize}`),
       reservationId: selectedReservationId || null,
     };
 
-    const resultAction = await dispatch(startDiningSession({sessionData, staffId: staff.id}));
+    const resultAction = await dispatch(startDiningSession({sessionData})); // staffId is handled by backend via token
     if (startDiningSession.fulfilled.match(resultAction)) {
       const newSession = resultAction.payload;
       setIsModalOpen(false);
@@ -94,18 +124,39 @@ function TableMapPage() {
       setSelectedReservationId('');
       setPartyIdentifier('');
       dispatch(fetchTables()); // Re-fetch tables to update status
-      if(selectedReservationId) dispatch(fetchReservations({ status: ReservationStatusEnum.CONFIRMED, date: new Date().toISOString().split('T')[0] })); // Re-fetch reservations
-      // Potentially navigate to the new dining session's order page
-      // navigate(`/staff/sessions/${newSession.id}/orders`);
+      if(sessionData.reservationId) dispatch(fetchReservations({ status: ReservationStatusEnum.CONFIRMED, date: todayISO }));
+      
       alert(`Dining session started for table ${selectedTable.tableNumber}!`);
       navigate(`/staff/sessions/${newSession.id}/orders/new`);
     }
-    // Errors will be handled by sessionSubmitError displayed in modal
+    // Errors are handled by sessionSubmitError displayed in modal or via alert
+     if (startDiningSession.rejected.match(resultAction)) {
+        alert(`Failed to start session: ${resultAction.payload || 'Unknown error'}`);
+    }
   };
 
-  const confirmedReservationsForToday = reservations.filter(
-    r => r.status === ReservationStatusEnum.CONFIRMED && (!r.diningSession || r.diningSession?.status !== 'ACTIVE')
-  );
+  // Filter reservations for the dropdown based on the selected table's status
+  const reservationsForDropdown = useMemo(() => {
+    if (!selectedTable || reservationsLoading || reservationsError) return [];
+
+    if (selectedTable.status === TableStatusEnum.RESERVED) {
+      // If table is reserved, ideally only show the reservation specifically for this table.
+      // Backend will enforce this, but UI can guide.
+      return reservations.filter(
+        r => r.status === ReservationStatusEnum.CONFIRMED && r.tableId === selectedTable.id
+      );
+    } else if (selectedTable.status === TableStatusEnum.AVAILABLE) {
+      // If table is available, show confirmed reservations that DO NOT have a table assigned yet,
+      // or allow selecting any confirmed reservation (backend will validate if that reservation's pre-assigned table matches).
+      // For a simpler UI, let's show confirmed reservations that don't yet have an *active* session.
+      return reservations.filter(
+        r => r.status === ReservationStatusEnum.CONFIRMED &&
+             (!r.diningSession || r.diningSession?.status !== DiningSessionStatus.ACTIVE) && // Not already seated
+             (!r.tableId || r.tableId === selectedTable.id) // Either unassigned OR assigned to this specific available table
+      );
+    }
+    return []; // No reservations to link if table is not in a seatable state for new sessions this way
+  }, [selectedTable, reservations, reservationsLoading, reservationsError]);
 
   return (
     <div className="container mx-auto p-4">
@@ -114,7 +165,7 @@ function TableMapPage() {
       {tablesLoading && <p>Loading tables...</p>}
       {tablesError && <p className="text-red-500">Error fetching tables: {tablesError}</p>}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
         {tables.map((table) => (
           <button
             key={table.id}
@@ -139,21 +190,33 @@ function TableMapPage() {
         {selectedTable && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link Reservation (Optional):</label>
+              <label htmlFor="reservationSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link Reservation (Optional):</label>
               <select
+                id="reservationSelect"
                 value={selectedReservationId}
                 onChange={(e) => {
-                    setSelectedReservationId(e.target.value);
-                    const res = confirmedReservationsForToday.find(r => r.id === e.target.value);
-                    if (res) setPartySize(res.partySize);
+                    const resId = e.target.value;
+                    setSelectedReservationId(resId);
+                    const res = reservations.find(r => r.id === resId); // Use full reservations list
+                    if (res) {
+                        setPartySize(res.partySize);
+                        setPartyIdentifier(res.customer?.name || `Reservation ${res.id.slice(-4)}`);
+                    } else {
+                        // Reset if "Walk-in" is selected or no reservation
+                        setPartySize(Math.min(2, selectedTable.capacity));
+                        setPartyIdentifier('');
+                    }
                 }}
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
               >
-                <option value="">Select a Confirmed Reservation (Walk-in if empty)</option>
+                <option value="">-- Walk-in --</option>
                 {reservationsLoading && <option disabled>Loading reservations...</option>}
-                {confirmedReservationsForToday.map(res => (
+                {/* Use filtered reservationsForDropdown here if you prefer stricter UI guidance */}
+                {/* Or show all confirmed and let backend validate */}
+                {reservations.filter(r => r.status === ReservationStatusEnum.CONFIRMED).map(res => (
                   <option key={res.id} value={res.id}>
-                    {res.customer.name} - {res.partySize} ppl @ {new Date(res.reservationTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {res.customer?.name || 'N/A'} - {res.partySize} ppl @ {new Date(res.reservationTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {res.tableId && ` (for T${res.table?.tableNumber || res.tableId.slice(-4)})`}
                   </option>
                 ))}
               </select>
@@ -161,21 +224,25 @@ function TableMapPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Party Size:</label>
+              <label htmlFor="partySizeInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Party Size:</label>
               <input
+                id="partySizeInput"
                 type="number"
                 value={partySize}
                 onChange={(e) => setPartySize(parseInt(e.target.value,10))}
                 min="1"
-                max={selectedTable.capacity}
+                max={selectedTable.capacity} // Dynamic max based on selected table
                 required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
               />
+              {partySize > selectedTable.capacity && <p className="text-red-500 text-xs mt-1">Party exceeds table capacity of {selectedTable.capacity}.</p>}
             </div>
-            {!selectedReservationId && ( // Only show for walk-ins
+
+            {!selectedReservationId && (
                 <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Party Identifier (e.g., Name for Walk-in):</label>
+                <label htmlFor="partyIdentifierInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Party Identifier (e.g., Name for Walk-in):</label>
                 <input
+                    id="partyIdentifierInput"
                     type="text"
                     value={partyIdentifier}
                     onChange={(e) => setPartyIdentifier(e.target.value)}
@@ -184,10 +251,11 @@ function TableMapPage() {
                 />
                 </div>
             )}
+
             {sessionSubmitError && <p className="text-red-500 text-sm">{sessionSubmitError}</p>}
             <button
               onClick={handleStartSession}
-              disabled={isSessionSubmitting || !partySize || partySize > selectedTable.capacity }
+              disabled={isSessionSubmitting || !partySize || partySize <= 0 || partySize > selectedTable.capacity }
               className="mt-4 w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md disabled:opacity-50"
             >
               {isSessionSubmitting ? 'Processing...' : 'Start Dining Session'}

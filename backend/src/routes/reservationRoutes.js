@@ -38,6 +38,13 @@ router.patch(
   reservationController.cancelReservationHandler
 );
 
+router.patch(
+  '/:reservationId/no-show', // New route
+  isAuthenticated,
+  authorizeRoles(StaffRole.MANAGER, StaffRole.CASHIER, StaffRole.WAITER), // Define who can mark no-show
+  reservationController.markAsNoShowHandler
+);
+
 // Other routes for seating, etc. can be added here or in a dining_session controller
 
 export default router;

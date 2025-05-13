@@ -85,6 +85,7 @@ export const createReservation = async (reservationData, customerDetails) => {
 
   // No table availability check or assignment at creation time.
   // Table is assigned during confirmation by staff.
+  console.log(reservationData,customerDetails)
 
   return prisma.reservation.create({
     data: {
@@ -211,6 +212,40 @@ export const getAllReservations = async (filters = {}) => {
     where: whereClause,
     include: { customer: true, table: true, confirmedBy: { select: { id: true, name: true }} },
     orderBy: { reservationTime: 'asc' },
+  });
+};
+
+export const markReservationAsNoShow = async (reservationId, staffId) => {
+  return prisma.$transaction(async (tx) => {
+      const reservation = await tx.reservation.findUnique({
+          where: { id: reservationId },
+          include: { table: true } // Include table to update its status if needed
+      });
+
+      if (!reservation) throw new Error('Reservation not found.');
+      // Typically, can only mark PENDING or CONFIRMED as NO_SHOW.
+      // SEATED or COMPLETED or CANCELLED shouldn't become NO_SHOW.
+      if (reservation.status !== ReservationStatus.PENDING && reservation.status !== ReservationStatus.CONFIRMED) {
+          throw new Error(`Cannot mark reservation as No-Show. Current status: ${reservation.status}`);
+      }
+
+      const updatedReservation = await tx.reservation.update({
+          where: { id: reservationId },
+          data: {
+              status: ReservationStatus.NO_SHOW,
+              // staffIdConfirmedBy: staffId, // Or a new field like staffIdMarkedNoShow
+          },
+          include: { customer: true, table: true }
+      });
+
+      // If a table was RESERVED for this no-show, make it AVAILABLE again.
+      if (updatedReservation.tableId && updatedReservation.table?.status === TableStatus.RESERVED) {
+          await tx.table.update({
+              where: { id: updatedReservation.tableId },
+              data: { status: TableStatus.AVAILABLE }
+          });
+      }
+      return updatedReservation;
   });
 };
 

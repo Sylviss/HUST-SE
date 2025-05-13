@@ -1,6 +1,6 @@
 // ./backend/src/services/billingService.js
 import prisma from '../db/prismaClient.js';
-import { BillStatus, DiningSessionStatus, OrderStatus, OrderItemStatus, TableStatus } from '@prisma/client';
+import { BillStatus, DiningSessionStatus, OrderStatus, OrderItemStatus, TableStatus, ReservationStatus } from '@prisma/client';
 
 // Helper function to calculate bill totals
 const calculateBillAmounts = (orders) => {
@@ -163,7 +163,7 @@ export const confirmPaymentForBill = async (billId, paymentDetails, staffId) => 
   return prisma.$transaction(async (tx) => {
     const bill = await tx.bill.findUnique({
       where: { id: billId },
-      include: { diningSession: true }
+      include: { diningSession: { select: { id: true, tableId: true, reservationId: true } } }
     });
 
     if (!bill) throw new Error('Bill not found.');
@@ -193,14 +193,19 @@ export const confirmPaymentForBill = async (billId, paymentDetails, staffId) => 
       },
     });
 
-    // Update table status to AVAILABLE (or NEEDS_CLEANING)
+    // Update table status
     await tx.table.update({
-      where: { id: updatedSession.tableId },
+      where: { id: bill.diningSession.tableId }, // Use tableId from fetched session
       data: { status: TableStatus.AVAILABLE }, // Or NEEDS_CLEANING
     });
 
-    return updatedBill;
+    // Update linked reservation status to COMPLETED
+    if (bill.diningSession.reservationId) { // Check if reservationId exists on the fetched session
+      await tx.reservation.update({
+        where: { id: bill.diningSession.reservationId },
+        data: { status: ReservationStatus.COMPLETED }
+      });
+    }
+    return updatedBill; // Or return a more comprehensive object
   });
 };
-
-// voidBill function might be needed later

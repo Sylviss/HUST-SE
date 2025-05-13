@@ -115,8 +115,8 @@ enum ReservationStatus {
 
 model DiningSession {
   id                 String             @id @default(uuid())
-  tableId            String
-  table              Table              @relation(fields: [tableId], references: [id])
+  tableId            String?
+  table              Table?             @relation(fields: [tableId], references: [id])
   reservationId      String?            @unique // A reservation can only start one dining session
   reservation        Reservation?       @relation(fields: [reservationId], references: [id])
   staffIdOpenedBy    String
