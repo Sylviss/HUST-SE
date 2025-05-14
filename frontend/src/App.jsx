@@ -49,13 +49,13 @@ function App() {
 
   // Determine which links to show for authenticated staff members
   const showManagerAdminLinks = isAuthenticated && staff?.role === StaffRole.MANAGER;
-  const showReservationLinks = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.WAITER);
+  const showReservationLinks = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER);
   const showSeatingLinks = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER);
-  const showActiveSessionsLink = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER); // Cashier might not need quick link
+  const showActiveSessionsLink = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER); 
   const showKitchenLink = isAuthenticated && (staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.MANAGER);
   const showServingQueueLink = isAuthenticated && (staff?.role === StaffRole.WAITER || staff?.role === StaffRole.MANAGER);
   const showStaffMenuLink = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.KITCHEN_STAFF || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER)
-  const canViewAllSessions = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.WAITER);
+  const canViewAllSessions = isAuthenticated && (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER); // Assuming all roles can view sessions
   
 
   return (
@@ -140,15 +140,16 @@ function App() {
             <Route path={staffDashboardPath} element={<DashboardPage />} />
             <Route path="/menu" element={<MenuItemsPage />} /> {/* Staff Menu View/Management */}
 
-            <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER, StaffRole.WAITER, StaffRole.CASHIER]} />}>
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER, StaffRole.CASHIER]} />}>
               <Route path="/staff/reservations" element={<ReservationsManagementPage />} />
+              <Route path="/staff/sessions/:sessionId/bill" element={<BillingPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={[StaffRole.MANAGER, StaffRole.WAITER, StaffRole.CASHIER]} />}>
               <Route path="/staff/seating" element={<TableMapPage />} />
               <Route path="/staff/active-sessions" element={<ActiveSessionsPage />} />
-              <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} />
-              <Route path="/staff/sessions/:sessionId/orders/:orderIdForResolution/resolve" element={<OrderTakingPage />} />
-              <Route path="/staff/sessions/:sessionId/bill" element={<BillingPage />} />
-              <Route path="/staff/sessions" element={<DiningSessionsListPage />} /> {/* List all sessions */}
-              <Route path="/staff/sessions/:sessionId/details" element={<DiningSessionDetailPage />} /> {/* View specific session */}
+              <Route path="/staff/sessions" element={<DiningSessionsListPage />} />
+              <Route path="/staff/sessions/:sessionId/details" element={<DiningSessionDetailPage />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.KITCHEN_STAFF, StaffRole.MANAGER]} />}>
@@ -157,6 +158,8 @@ function App() {
 
             <Route element={<ProtectedRoute allowedRoles={[StaffRole.WAITER, StaffRole.MANAGER]} />}>
               <Route path="/staff/serving-queue" element={<ServingQueuePage />} />
+              <Route path="/staff/sessions/:sessionId/orders/new" element={<OrderTakingPage />} />
+              <Route path="/staff/sessions/:sessionId/orders/:orderIdForResolution/resolve" element={<OrderTakingPage />} />
             </Route>
 
             {/* Manager Only Admin Routes */}

@@ -84,24 +84,6 @@ function KitchenDisplayPage() {
                       {item.quantity}x {item.menuItem?.name}
                       {item.specialRequests && <em className="text-xs block text-gray-500 dark:text-gray-400 ml-4"> - {item.specialRequests}</em>}
                       (Status: {item.status})
-                       {item.status === OrderItemStatus.PENDING && staff?.role === StaffRole.KITCHEN_STAFF && (
-                            <button
-                                onClick={() => handleUpdateOrderItemStatus(item.id, OrderItemStatus.PREPARING)}
-                                disabled={isUpdatingStatus}
-                                className="ml-2 text-xs px-1.5 py-0.5 bg-orange-500 hover:bg-orange-600 text-white rounded"
-                            >
-                                Prep Item
-                            </button>
-                        )}
-                         {item.status === OrderItemStatus.PREPARING && staff?.role === StaffRole.KITCHEN_STAFF && (
-                            <button
-                                onClick={() => handleUpdateOrderItemStatus(item.id, OrderItemStatus.READY)}
-                                disabled={isUpdatingStatus}
-                                className="ml-2 text-xs px-1.5 py-0.5 bg-teal-500 hover:bg-teal-600 text-white rounded"
-                            >
-                                Item Ready
-                            </button>
-                        )}
                     </li>
                   ))}
                 </ul>
@@ -138,15 +120,6 @@ function KitchenDisplayPage() {
                   {order.items?.map(item => (
                     <li key={item.id} className="text-gray-600 dark:text-gray-300">
                       {item.quantity}x {item.menuItem?.name} (Status: {item.status})
-                       {item.status === OrderItemStatus.PREPARING && staff?.role === StaffRole.KITCHEN_STAFF && (
-                            <button
-                                onClick={() => handleUpdateOrderItemStatus(item.id, OrderItemStatus.READY)}
-                                disabled={isUpdatingStatus}
-                                className="ml-2 text-xs px-1.5 py-0.5 bg-teal-500 hover:bg-teal-600 text-white rounded"
-                            >
-                                Item Ready
-                            </button>
-                        )}
                     </li>
                   ))}
                 </ul>

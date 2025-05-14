@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchAllDiningSessions, clearSessionListError } from '../../store/slices/diningSessionSlice';
-import { DiningSessionStatus } from '../../utils/constants'; // Make sure this enum is defined
+import { DiningSessionStatus ,StaffRole} from '../../utils/constants'; // Make sure this enum is defined
 
 function ActiveSessionsPage() {
   const dispatch = useDispatch();
@@ -64,30 +64,26 @@ function ActiveSessionsPage() {
               <h3 className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mb-2">
                 Table: {session.table?.tableNumber || 'N/A'}
               </h3>
+
               <div className="mt-4 space-y-2">
-                <button
-                    onClick={() => navigate(`/staff/sessions/${session.id}/orders/new`)} // Existing order taking
-                    className="w-full text-sm px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
-                >
-                    View/Add Orders
-                </button>
-                {(session.status === DiningSessionStatus.ACTIVE || session.status === DiningSessionStatus.BILLED) && (
+                {(staff?.role === StaffRole.WAITER || staff?.role === StaffRole.MANAGER) &&
+                 (session.status === DiningSessionStatus.ACTIVE || session.status === DiningSessionStatus.BILLED) && // Can add to billed session if policy allows
                     <button
-                        onClick={() => handleGoToBilling(session.id)}
+                        onClick={() => navigate(`/staff/sessions/${session.id}/orders/new`)}
+                        className="w-full text-sm px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
+                    >
+                        View/Add Orders
+                    </button>
+                }
+                {(staff?.role === StaffRole.CASHIER || staff?.role === StaffRole.MANAGER) &&
+                 (session.status === DiningSessionStatus.ACTIVE || session.status === DiningSessionStatus.BILLED) &&
+                    <button
+                        onClick={() => navigate(`/staff/sessions/${session.id}/bill`)}
                         className="w-full text-sm px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-md"
                     >
                         Process Bill
                     </button>
-                )}
-                {session.orders?.filter(o => o.status === OrderStatus.ACTION_REQUIRED).map(order => (
-                    <button
-                        key={order.id}
-                        onClick={() => navigate(`/staff/sessions/${session.id}/orders/${order.id}/resolve`, { state: { orderToResolve: order }})}
-                        className="mt-1 text-xs px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded"
-                    >
-                        Resolve Order ...{order.id.slice(-6)}
-                    </button>
-                ))}
+                }
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 Session ID: ...{session.id.slice(-6)}

@@ -13,7 +13,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
   if (allowedRoles && staff && !allowedRoles.includes(staff.role)) {
     // Optional: Redirect to an "Unauthorized" page or back to dashboard
     console.warn(`User role ${staff.role} not in allowed roles: ${allowedRoles.join(', ')}`);
-    return <Navigate to="/" replace />; // Or a specific unauthorized page
+    return <Navigate to="/staff/dashboard" replace />; // Or a specific unauthorized page
   }
 
   return <Outlet />; // Render child routes/component

@@ -14,6 +14,7 @@ export const createMenuItemHandler = async (req, res, next) => {
 };
 
 export const getAllMenuItemsHandler = async (req, res, next) => {
+  console.log(req.query)
   try {
     let filters = {};
     // Check if this is the specific admin path or if the user is a manager and no specific filter is set
@@ -24,7 +25,7 @@ export const getAllMenuItemsHandler = async (req, res, next) => {
     } else {
       // Default for '/' path, or if not the admin path
       filters.isAvailable = true; // Default to available items
-      if (req.query.availableOnly === 'false' && req.staff?.role === 'MANAGER') {
+      if (req.query.availableOnly === 'false') {
         // Manager explicitly requested all items via the public path
         delete filters.isAvailable;
       } else if (req.query.availableOnly === 'true') {
@@ -32,7 +33,9 @@ export const getAllMenuItemsHandler = async (req, res, next) => {
       }
     }
     // console.log(`getAllMenuItemsHandler: path=${req.path}, query=${JSON.stringify(req.query)}, appliedFilters=${JSON.stringify(filters)}`);
+    console.log(filters)
     const menuItems = await menuItemService.getAllMenuItems(filters);
+    console.log(menuItems)
     res.status(200).json(menuItems);
   } catch (error) {
     next(error);

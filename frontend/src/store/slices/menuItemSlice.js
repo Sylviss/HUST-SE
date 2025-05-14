@@ -10,11 +10,11 @@ export const fetchMenuItems = createAsyncThunk(
       let endpoint = '/menu-items'; // Default for generally available items
       const { auth } = getState(); // Get auth state
       const isUserAManager = auth.staff?.role === 'MANAGER'; // Assuming role is stored in auth.staff
-
+      
       if (params.allForManager && isUserAManager) { // Check if manager and if allForManager is requested
         endpoint = '/menu-items/all-for-admin'; // MATCHES NEW BACKEND ROUTE
       } else { // Default public/non-manager view or specific filter
-        endpoint = '/menu-items?availableOnly=true'; // Ensure this param is handled by backend
+        endpoint = '/menu-items?availableOnly=' + (params.availableOnly !== false); // Default to true
       }
       // console.log('Fetching menu items from endpoint:', endpoint, 'with params:', params);
       const response = await apiClient.get(endpoint);
