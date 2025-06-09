@@ -126,19 +126,12 @@ These steps guide you through building the Docker images, installing dependencie
 
     *   **Alternative for First Admin (Using Register Endpoint):** If you prefer not to use Prisma seed for the first admin, the `POST /api/v1/auth/register` endpoint is designed to automatically assign the `MANAGER` role to the very first user registered if the `staff` table is empty. You can use Postman for this after migrations are run and *before* any other staff are created. See project documentation for more details on this method.
 
-5.  **Perform Initial Package-Specific Setups (Frontend):**
-    *   **Tailwind CSS (if not already initialized):**
-        ```bash
-        docker-compose exec frontend npx tailwindcss init -p
-        ```
-        Then, configure `./frontend/tailwind.config.js` and `./frontend/src/index.css`.
-
-6.  **Stop the Containers:**
+5.  **Stop the Containers:**
     ```bash
     docker-compose down
     ```
 
-7.  **Enable Development Servers in `docker-compose.yml`:**
+6.  **Enable Development Servers in `docker-compose.yml`:**
     *   Open `docker-compose.yml`.
     *   **Uncomment** the `command` lines for both `frontend` and `backend`.
     *   Save the file.
