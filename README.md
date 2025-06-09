@@ -104,12 +104,6 @@ These steps guide you through building the Docker images, installing dependencie
         ```
 
 4.  **Initialize Prisma, Run Migrations, and Seed Database (Backend):**
-    *   **Initialize Prisma (if not already done):**
-        ```bash
-        docker-compose exec backend npx prisma init --datasource-provider postgresql
-        ```
-        *(This creates `prisma/schema.prisma` and updates `.env`. You should have your schema defined.)*
-
     *   **Run Migrations:** This applies your schema and creates tables.
         ```bash
         docker-compose exec backend npx prisma migrate dev --name initial-migration
