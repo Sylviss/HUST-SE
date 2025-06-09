@@ -67,9 +67,9 @@ function ReportsPage() {
         {revenueReport && !isLoading && (
           <div className="space-y-2 text-gray-700 dark:text-gray-300">
             <p>Date Range: <span className="font-semibold">{revenueReport.startDate}</span> to <span className="font-semibold">{revenueReport.endDate}</span></p>
-            <p>Total Revenue: <span className="font-semibold text-green-600 dark:text-green-400">${parseFloat(revenueReport.totalRevenue).toFixed(2)}</span></p>
+            <p>Total Revenue: <span className="font-semibold text-green-600 dark:text-green-400">đ{parseFloat(revenueReport.totalRevenue).toFixed(0)}</span></p>
             <p>Number of Paid Bills: <span className="font-semibold">{revenueReport.numberOfPaidBills}</span></p>
-            <p>Average Bill Value: <span className="font-semibold">${parseFloat(revenueReport.averageBillValue).toFixed(2)}</span></p>
+            <p>Average Bill Value: <span className="font-semibold">đ{parseFloat(revenueReport.averageBillValue).toFixed(0)}</span></p>
           </div>
         )}
       </div>
@@ -93,7 +93,7 @@ function ReportsPage() {
           <ul className="space-y-1 text-gray-700 dark:text-gray-300">
             {popularItemsReport.map(item => (
               <li key={item.menuItemId} className="p-2 border-b dark:border-gray-700 last:border-b-0">
-                <span className="font-semibold">{item.name || 'Unknown Item'}</span> - Sold: {item.totalQuantitySold} times (Current Price: ${parseFloat(item.currentPrice || 0).toFixed(2)})
+                <span className="font-semibold">{item.name || 'Unknown Item'}</span> - Sold: {item.totalQuantitySold} times (Current Price: đ{parseFloat(item.currentPrice || 0).toFixed(0)})
               </li>
             ))}
           </ul>

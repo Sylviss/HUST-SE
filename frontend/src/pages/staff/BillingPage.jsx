@@ -145,7 +145,7 @@ function BillingPage() {
             ).map((item, index) => (
                 <div key={item.id || `bill-item-${index}`} className="flex justify-between text-sm py-1">
                     <span className="text-gray-600 dark:text-gray-400">{item.quantity}x {item.menuItem?.name || 'Item Name Missing'}</span>
-                    <span className="text-gray-800 dark:text-gray-200">${(parseFloat(item.priceAtOrderTime) * item.quantity).toFixed(2)}</span>
+                    <span className="text-gray-800 dark:text-gray-200">đ{(parseFloat(item.priceAtOrderTime) * item.quantity).toFixed(0)}</span>
                 </div>
             ))}
             {(!currentBill.diningSession?.orders ||
@@ -157,12 +157,12 @@ function BillingPage() {
           </div>
 
           <div className="space-y-2 text-right mb-6">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Subtotal: <span className="font-semibold">${parseFloat(currentBill.subtotalAmount || 0).toFixed(2)}</span></p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Tax: <span className="font-semibold">${parseFloat(currentBill.taxAmount || 0).toFixed(2)}</span></p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Subtotal: <span className="font-semibold">đ{parseFloat(currentBill.subtotalAmount || 0).toFixed(0)}</span></p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Tax: <span className="font-semibold">đ{parseFloat(currentBill.taxAmount || 0).toFixed(0)}</span></p>
             {currentBill.discountAmount > 0 &&
-              <p className="text-sm text-gray-600 dark:text-gray-400">Discount: <span className="font-semibold">-${parseFloat(currentBill.discountAmount).toFixed(2)}</span></p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Discount: <span className="font-semibold">-đ{parseFloat(currentBill.discountAmount).toFixed(0)}</span></p>
             }
-            <p className="text-xl font-bold text-gray-800 dark:text-white">Total: <span className="text-green-600 dark:text-green-400">${parseFloat(currentBill.totalAmount || 0).toFixed(2)}</span></p>
+            <p className="text-xl font-bold text-gray-800 dark:text-white">Total: <span className="text-green-600 dark:text-green-400">đ{parseFloat(currentBill.totalAmount || 0).toFixed(0)}</span></p>
           </div>
 
           {currentBill.status === BillStatus.UNPAID && (

@@ -32,13 +32,17 @@ function PublicMenuPage() {
             // though the fetch should already filter this. Defensive check.
             item.isAvailable && (
                 <div key={item.id} className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 flex flex-col transition-transform hover:scale-105">
-                {item.imageUrl && (
-                    <img
-                    src={item.imageUrl || 'https://dummyimage.com/300x200/ccc/000&text=Food+Image'}
+                <div className="w-full h-40 mb-4">
+                  <img
+                    src={item.imageUrl || 'https://dummyimage.com/300x200/000/fff&text=No+Image'}
                     alt={item.name}
-                    className="w-full h-48 object-cover rounded-md mb-4 bg-gray-200 dark:bg-gray-700"
-                    />
-                )}
+                    className="w-full h-full object-cover rounded-md bg-gray-200 dark:bg-gray-700"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://dummyimage.com/300x200/000/fff&text=No+Image';
+                    }}
+                  />
+                </div>
                 <div className="flex-grow">
                     <h3 className="text-2xl font-semibold text-gray-800 dark:text-blue-400 mb-2">{item.name}</h3>
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 min-h-[3em]"> {/* min-h for consistent description height */}
@@ -46,7 +50,7 @@ function PublicMenuPage() {
                     </p>
                 </div>
                 <div className="mt-auto">
-                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mb-3">${parseFloat(item.price).toFixed(2)}</p>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mb-3">đ{parseFloat(item.price).toFixed(0)}</p>
                     {item.tags && item.tags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                         {item.tags.map(tag => (

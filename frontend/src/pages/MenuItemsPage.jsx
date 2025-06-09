@@ -74,16 +74,20 @@ function MenuItemsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {menuItems.map((item) => (
             <div key={item.id} className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
-              {item.imageUrl && (
+              <div className="w-full h-40 mb-4">
                 <img
                   src={item.imageUrl || 'https://dummyimage.com/300x200/000/fff&text=No+Image'}
                   alt={item.name}
-                  className="w-full h-40 object-cover rounded-md mb-4 bg-gray-200 dark:bg-gray-700"
+                  className="w-full h-full object-cover rounded-md bg-gray-200 dark:bg-gray-700"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://dummyimage.com/300x200/000/fff&text=No+Image';
+                  }}
                 />
-              )}
+              </div>
               <h3 className="text-xl font-bold text-gray-700 dark:text-blue-400 mb-2">{item.name}</h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm mb-2 truncate h-10">{item.description || "No description."}</p>
-              <p className="text-lg font-semibold text-green-600 dark:text-green-400 mb-3">${parseFloat(item.price).toFixed(2)}</p>
+              <p className="text-lg font-semibold text-green-600 dark:text-green-400 mb-3">đ{parseFloat(item.price).toFixed(0)}</p>
               <p className={`text-sm font-medium ${item.isAvailable ? 'text-green-500' : 'text-red-500'}`}>
                 {item.isAvailable ? 'Available' : 'Unavailable (Sold Out)'}
               </p>

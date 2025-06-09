@@ -156,7 +156,7 @@ function OrderTakingPage() {
   const calculateDraftTotal = () => {
     return draftOrderItems
       .filter(item => !item.markedForCancellation && item.quantity > 0) // Only count items not cancelled and with quantity > 0
-      .reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2);
+      .reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(0);
   };
 
   const handleSubmitOrderOrChanges = async () => {
@@ -273,7 +273,7 @@ function OrderTakingPage() {
           {menuItems.map(item => (
             <div key={item.id} className={`p-4 border rounded-lg shadow bg-white dark:bg-gray-800 ${!item.isAvailable ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}`}>
               <h3 className="font-bold text-gray-700 dark:text-white">{item.name}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">${parseFloat(item.price).toFixed(2)}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">đ{parseFloat(item.price).toFixed(0)}</p>
               {!item.isAvailable && <p className="text-xs text-red-500 dark:text-red-400 font-semibold">(Currently Unavailable)</p>}
               <button
                 onClick={() => item.isAvailable && handleAddItemToDraft(item)}
@@ -332,7 +332,7 @@ function OrderTakingPage() {
                         onChange={(e) => handleUpdateDraftItem(draftItem.isExistingItem ? draftItem.orderItemId : draftItem.menuItemId, 'quantity', e.target.value)}
                         className="w-16 px-1 py-0.5 border rounded dark:bg-gray-600 dark:border-gray-500 text-sm text-center dark:text-white"
                       />
-                      <span className="text-xs text-gray-700 dark:text-gray-300">${(draftItem.price * draftItem.quantity).toFixed(2)}</span>
+                      <span className="text-xs text-gray-700 dark:text-gray-300">đ{(draftItem.price * draftItem.quantity).toFixed(0)}</span>
                     </div>
                     <input
                       type="text"
@@ -359,7 +359,7 @@ function OrderTakingPage() {
             className="w-full px-2 py-1 border rounded dark:bg-gray-600 dark:border-gray-500 text-sm mb-3 dark:text-white"
           />
           <div className="text-lg font-bold mb-3 text-gray-800 dark:text-gray-200">
-            Draft Total: ${calculateDraftTotal()}
+            Draft Total: đ{calculateDraftTotal()}
           </div>
           {orderSubmitError && <p className="text-red-500 text-sm mb-2">Submit Error: {orderSubmitError}</p>}
           {resolveError && <p className="text-red-500 text-sm mb-2">Resolve Error: {resolveError}</p>}
@@ -401,7 +401,7 @@ function OrderTakingPage() {
                   </span>
                 </div>
                 <div className="text-xxs text-gray-500 dark:text-gray-400">
-                  {order.items?.length || 0} items - Total: ${order.items?.reduce((sum, i) => sum + (i.priceAtOrderTime * i.quantity), 0).toFixed(2) || '0.00'}
+                  {order.items?.length || 0} items - Total: đ{order.items?.reduce((sum, i) => sum + (i.priceAtOrderTime * i.quantity), 0).toFixed(0) || '0.00'}
                 </div>
                 {(order.status === OrderStatus.PENDING || order.status === OrderStatus.ACTION_REQUIRED) &&
                   (staff?.role === StaffRole.MANAGER || staff?.role === StaffRole.WAITER || staff?.role === StaffRole.CASHIER) && (

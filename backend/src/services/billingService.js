@@ -29,10 +29,10 @@ const calculateBillAmounts = (orders) => {
   const total = subtotal + tax - discount;
 
   return {
-    subtotalAmount: parseFloat(subtotal.toFixed(2)),
-    taxAmount: parseFloat(tax.toFixed(2)),
-    discountAmount: parseFloat(discount.toFixed(2)),
-    totalAmount: parseFloat(total.toFixed(2)),
+    subtotalAmount: parseFloat(subtotal.toFixed(0)),
+    taxAmount: parseFloat(tax.toFixed(0)),
+    discountAmount: parseFloat(discount.toFixed(0)),
+    totalAmount: parseFloat(total.toFixed(0)),
   };
 };
 

@@ -34,7 +34,7 @@ function DiningSessionDetailPage() {
             return sum + (parseFloat(item.priceAtOrderTime) * item.quantity);
         }
         return sum;
-    }, 0).toFixed(2) || '0.00';
+    }, 0).toFixed(0) || '0.00';
   }
 
   return (
@@ -68,7 +68,7 @@ function DiningSessionDetailPage() {
           {currentSession.bill ? (
             <>
               <p><strong>Bill ID:</strong> ...{currentSession.bill.id.slice(-6)}</p>
-              <p><strong>Total Amount:</strong> <span className="font-bold text-green-600 dark:text-green-400">${parseFloat(currentSession.bill.totalAmount || 0).toFixed(2)}</span></p>
+              <p><strong>Total Amount:</strong> <span className="font-bold text-green-600 dark:text-green-400">đ{parseFloat(currentSession.bill.totalAmount || 0).toFixed(0)}</span></p>
               <p><strong>Status:</strong> <span className="font-semibold">{currentSession.bill.status}</span></p>
               {currentSession.bill.status === BillStatus.PAID && currentSession.bill.paymentConfirmationTime && (
                  <p><strong>Paid At:</strong> {new Date(currentSession.bill.paymentConfirmationTime).toLocaleString()}</p>
@@ -100,7 +100,7 @@ function DiningSessionDetailPage() {
                 <ul className="list-disc list-inside ml-4 text-sm">
                   {order.items?.map(item => (
                     <li key={item.id} className="text-gray-600 dark:text-gray-300">
-                      {item.quantity}x {item.menuItem?.name || 'Unknown Item'} - ${(parseFloat(item.priceAtOrderTime) * item.quantity).toFixed(2)}
+                      {item.quantity}x {item.menuItem?.name || 'Unknown Item'} - đ{(parseFloat(item.priceAtOrderTime) * item.quantity).toFixed(0)}
                       {item.status === OrderItemStatus.SOLD_OUT && <span className="ml-2 text-xs text-red-500">(SOLD OUT)</span>}
                       {item.status === OrderItemStatus.CANCELLED && <span className="ml-2 text-xs text-gray-500 line-through">(CANCELLED)</span>}
                       {item.specialRequests && <p className="text-xs italic text-gray-500 dark:text-gray-400 ml-4">Note: {item.specialRequests}</p>}
@@ -108,7 +108,7 @@ function DiningSessionDetailPage() {
                   ))}
                 </ul>
                  {order.notes && <p className="text-xs italic text-gray-500 dark:text-gray-400 mt-1">Order Notes: {order.notes}</p>}
-                 <p className="text-right font-semibold text-sm mt-1">Order Total: ${calculateOrderTotal(order)}</p>
+                 <p className="text-right font-semibold text-sm mt-1">Order Total: đ{calculateOrderTotal(order)}</p>
               </div>
             ))}
           </div>
