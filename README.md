@@ -118,27 +118,14 @@ These steps guide you through building the Docker images, installing dependencie
         ```bash
         docker-compose exec backend npx prisma generate
         ```
-
-5.  **Perform Initial Package-Specific Setups (Frontend):**
-    *   **Tailwind CSS (if not already initialized in the project):**
-        ```bash
-        docker-compose exec frontend npx tailwindcss init -p
-        ```
-        Then, configure `./frontend/tailwind.config.js` and ensure your main CSS file (e.g., `./frontend/src/index.css`) includes the Tailwind directives:
-        ```css
-        @tailwind base;
-        @tailwind components;
-        @tailwind utilities;
-        ```
-
-6.  **Stop the Containers:**
+5.  **Stop the Containers:**
     Once dependencies are installed and the database is migrated, stop the containers:
     ```bash
     docker-compose down
     ```
     *(Do NOT use the `-v` flag here, as it would remove your `node_modules` and database volumes.)*
 
-7.  **Enable Development Servers in `docker-compose.yml`:**
+6.  **Enable Development Servers in `docker-compose.yml`:**
     *   Open `docker-compose.yml`.
     *   **Uncomment** the `command` lines for both the `frontend` and `backend` services:
         ```yaml
