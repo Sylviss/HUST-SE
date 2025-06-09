@@ -79,66 +79,68 @@ Before you begin, ensure you have the following installed on your system:
 
 ## Running the Application (First Time Setup)
 
-These steps guide you through building the Docker images, installing dependencies inside the containers, and running initial database migrations.
+These steps guide you through building the Docker images, installing dependencies inside the containers, and running initial database migrations and seeding.
 
 1.  **Build and Start Docker Containers (Detached Mode):**
     From the project root directory:
     ```bash
     docker-compose up -d --build
     ```
-    *   `--build`: Forces Docker to rebuild the images if there are changes to Dockerfiles (though we are using pre-built Node images, this is good practice if you add Dockerfiles later).
-    *   `-d`: Runs containers in detached mode (in the background).
+    *   `--build`: Forces Docker to rebuild the images if there are changes.
+    *   `-d`: Runs containers in detached mode.
 
 2.  **Install Frontend Dependencies:**
-    Execute the following command from your project root to run `npm install` inside the `frontend` container:
     ```bash
     docker-compose exec frontend npm install
     ```
-    *This installs all dependencies listed in `frontend/package.json` into the `frontend_node_modules` Docker volume.*
 
 3.  **Install Backend Dependencies:**
-    Execute the following command from your project root to run `npm install` inside the `backend` container:
     ```bash
     docker-compose exec backend npm install
     ```
-    *This installs all dependencies listed in `backend/package.json` into the `backend_node_modules` Docker volume.*
+    *   *Ensure `bcryptjs` is listed as a dependency in `backend/package.json` if you plan to use the Prisma seed method for the admin account.* If not, add it:
+        ```bash
+        docker-compose exec backend npm install bcryptjs
+        ```
 
-4.  **Initialize Prisma and Run Initial Database Migration (Backend):**
-    *   **Initialize Prisma (if not already done in the project):**
+4.  **Initialize Prisma, Run Migrations, and Seed Database (Backend):**
+    *   **Initialize Prisma (if not already done):**
         ```bash
         docker-compose exec backend npx prisma init --datasource-provider postgresql
         ```
-        *(This creates `prisma/schema.prisma` and updates `.env` if they don't exist. You should have already defined your schema in `schema.prisma` as per project setup.)*
-    *   **Run Migrations:** This command applies your Prisma schema to the database, creating tables.
+        *(This creates `prisma/schema.prisma` and updates `.env`. You should have your schema defined.)*
+
+    *   **Run Migrations:** This applies your schema and creates tables.
         ```bash
         docker-compose exec backend npx prisma migrate dev --name initial-migration
         ```
-        *(You might be prompted to name the migration or confirm. If you already have migrations, this will apply any pending ones.)*
     *   **Generate Prisma Client:**
         ```bash
         docker-compose exec backend npx prisma generate
         ```
-5.  **Stop the Containers:**
-    Once dependencies are installed and the database is migrated, stop the containers:
+    *   **Run Database Seed (to create the first admin if using seed method):**
+        ```bash
+        docker-compose exec backend npx prisma db seed
+        ```
+        *(This will execute the `prisma/seed.js` script if you configured it.)*
+
+    *   **Alternative for First Admin (Using Register Endpoint):** If you prefer not to use Prisma seed for the first admin, the `POST /api/v1/auth/register` endpoint is designed to automatically assign the `MANAGER` role to the very first user registered if the `staff` table is empty. You can use Postman for this after migrations are run and *before* any other staff are created. See project documentation for more details on this method.
+
+5.  **Perform Initial Package-Specific Setups (Frontend):**
+    *   **Tailwind CSS (if not already initialized):**
+        ```bash
+        docker-compose exec frontend npx tailwindcss init -p
+        ```
+        Then, configure `./frontend/tailwind.config.js` and `./frontend/src/index.css`.
+
+6.  **Stop the Containers:**
     ```bash
     docker-compose down
     ```
-    *(Do NOT use the `-v` flag here, as it would remove your `node_modules` and database volumes.)*
 
-6.  **Enable Development Servers in `docker-compose.yml`:**
+7.  **Enable Development Servers in `docker-compose.yml`:**
     *   Open `docker-compose.yml`.
-    *   **Uncomment** the `command` lines for both the `frontend` and `backend` services:
-        ```yaml
-        services:
-          frontend:
-            # ...
-            command: npm run dev -- --host --port 3000 # Uncommented
-            # ...
-          backend:
-            # ...
-            command: npm run dev # Uncommented
-            # ...
-        ```
+    *   **Uncomment** the `command` lines for both `frontend` and `backend`.
     *   Save the file.
 
 ## Running the Application for Development (After Initial Setup)
