@@ -146,7 +146,7 @@ These steps guide you through building the Docker images, installing dependencie
     *(If you made changes to `package.json` files or Docker-related configurations, you might want to run `docker-compose up -d --build` again.)*
 
 2.  **Access the Application:**
-    *   **Frontend (React App):** Open your browser and navigate to `http://localhost:3718` (or the host port you mapped for the frontend service in `docker-compose.yml`).
+    *   **Frontend (React App):** Open your browser and navigate to `http://localhost:3718` (or the host port you mapped for the frontend service in `docker-compose.yml`). The default admin account, used when run the app, is admin/admin123.
     *   **Backend API:** Accessible at `http://localhost:5000` (or the host port you mapped for the backend service). You can test endpoints using tools like Postman.
         *   Health check: `GET http://localhost:5000/api/v1/health`
 
