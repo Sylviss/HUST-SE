@@ -40,6 +40,7 @@ function OrderTakingPage() {
 
   const [draftOrderItems, setDraftOrderItems] = useState([]);
   const [overallOrderNotes, setOverallOrderNotes] = useState('');
+  const [menuSearchTerm, setMenuSearchTerm] = useState('');
 
   const sessionOrders = useMemo(() => ordersBySession[sessionId] || [], [ordersBySession, sessionId]);
 
@@ -49,6 +50,12 @@ function OrderTakingPage() {
     }
     return null;
   }, [isResolveMode, activeOrderIdFromParamsOrState, sessionOrders]);
+
+  const filteredMenuItems = menuItems.filter(item => 
+    item.name.toLowerCase().includes(menuSearchTerm.toLowerCase()) ||
+    (item.description && item.description.toLowerCase().includes(menuSearchTerm.toLowerCase())) ||
+    (item.tags && item.tags.some(tag => tag.toLowerCase().includes(menuSearchTerm.toLowerCase())))
+  );
 
   useEffect(() => {
     dispatch(fetchMenuItems({ availableOnly: true }));
@@ -264,13 +271,34 @@ function OrderTakingPage() {
         <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
           {isResolveMode && existingOrderToResolve ? `Resolve Order ...${existingOrderToResolve.id.slice(-6)}` : `Take Order`} for Table {currentSession.table?.tableNumber || 'N/A'}
         </h2>
+        
+        {/* Search Bar for Menu Items */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search menu items..."
+              value={menuSearchTerm}
+              onChange={(e) => setMenuSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+              <svg className="h-5 w-5 text-gray-400 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        
         {menuLoading && <p>Loading menu...</p>}
         {menuError && <p className="text-red-500">Error loading menu: {menuError}</p>}
-        {!menuLoading && !menuError && menuItems.length === 0 && (
-            <p className="text-gray-500 dark:text-gray-400">No menu items available to order.</p>
+        {!menuLoading && !menuError && filteredMenuItems.length === 0 && (
+            <p className="text-gray-500 dark:text-gray-400">
+              {menuItems.length === 0 ? "No menu items available to order." : "No menu items match your search."}
+            </p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[70vh] overflow-y-auto pr-2">
-          {menuItems.map(item => (
+          {filteredMenuItems.map(item => (
             <div key={item.id} className={`p-4 border rounded-lg shadow bg-white dark:bg-gray-800 ${!item.isAvailable ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}`}>
               <h3 className="font-bold text-gray-700 dark:text-white">{item.name}</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">đ{parseFloat(item.price).toFixed(0)}</p>

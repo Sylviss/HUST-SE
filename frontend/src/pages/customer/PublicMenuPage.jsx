@@ -1,10 +1,11 @@
 // ./frontend/src/pages/customer/PublicMenuPage.jsx
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchMenuItems, clearMenuItemError } from '../../store/slices/menuItemSlice';
 
 function PublicMenuPage() {
   const dispatch = useDispatch();
+  const [searchTerm, setSearchTerm] = useState('');
   const { items: menuItems, isLoading, error } = useSelector((state) => state.menuItems);
 
   useEffect(() => {
@@ -15,19 +16,44 @@ function PublicMenuPage() {
     }
   }, [dispatch]);
 
+  // Filter logic for menu items
+  const filteredMenuItems = menuItems.filter(item => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (item.tags && item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
+  );
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 dark:text-gray-200">Our Menu</h1>
+      
+      {/* Search Bar */}
+      <div className="max-w-md mx-auto mb-8">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search our menu..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+            <svg className="h-5 w-5 text-gray-400 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+            </svg>
+          </div>
+        </div>
+      </div>
 
       {isLoading && <p className="text-center text-blue-500">Loading menu...</p>}
       {error && <p className="text-center text-red-500">Error fetching menu: {error}</p>}
-      {!isLoading && !error && menuItems.length === 0 && (
+      {!isLoading && !error && filteredMenuItems.length === 0 && (
         <p className="text-center text-gray-600 dark:text-gray-400">Our menu is currently being updated. Please check back soon!</p>
       )}
 
-      {!isLoading && !error && menuItems.length > 0 && (
+      {!isLoading && !error && filteredMenuItems.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-          {menuItems.map((item) => (
+          {filteredMenuItems.map((item) => (
             // Only display if item.isAvailable is explicitly true,
             // though the fetch should already filter this. Defensive check.
             item.isAvailable && (
